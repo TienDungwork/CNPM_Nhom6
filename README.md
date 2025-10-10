@@ -1,7 +1,7 @@
 
   # HealthyColors Health Website Design
 
-  This is a code bundle for HealthyColors Health Website Design. The original project is available at https://www.figma.com/design/kDiWkL8zxLnnPl5OGdBQ46/HealthyColors-Health-Website-Design.
+  BY NHOM 6
 
   ## Running the code
 
