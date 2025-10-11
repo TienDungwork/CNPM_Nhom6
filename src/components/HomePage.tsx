@@ -1,11 +1,32 @@
 import { ArrowRight, Apple, Dumbbell, Moon } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext';
 import { Header } from './Header';
 import { Footer } from './Footer';
 import { Card } from './ui/card';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 
 export function HomePage() {
+  const { role } = useAuth();
+  const navigate = useNavigate();
+
+  // Dynamic navigation based on auth state
+  const handleGetStarted = () => {
+    if (role === 'user') {
+      navigate('/user/dashboard');
+    } else {
+      navigate('/signup');
+    }
+  };
+
+  const handleFeatureClick = (path: string) => {
+    if (role === 'user') {
+      navigate(path);
+    } else {
+      navigate('/login');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <Header />
@@ -27,12 +48,15 @@ export function HomePage() {
             <p className="text-white mb-8 opacity-90" style={{ fontSize: '1.125rem' }}>
               Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation.
             </p>
-            <Link to="/signup">
-              <button className="bg-white text-[#00C78C] px-8 py-4 rounded-xl hover:bg-gray-50 transition-all flex items-center gap-3 shadow-lg">
-                <span style={{ fontWeight: 600 }}>Get Started</span>
-                <ArrowRight className="w-5 h-5" />
-              </button>
-            </Link>
+            <button 
+              onClick={handleGetStarted}
+              className="bg-white text-[#00C78C] px-8 py-4 rounded-xl hover:bg-gray-50 transition-all flex items-center gap-3 shadow-lg"
+            >
+              <span style={{ fontWeight: 600 }}>
+                {role === 'user' ? 'Go to Dashboard' : 'Get Started'}
+              </span>
+              <ArrowRight className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </section>
@@ -49,10 +73,13 @@ export function HomePage() {
             <p className="text-gray-600 mb-6">
               Tính toán nhu cầu calo hàng ngày và nhận gợi ý thực đơn phù hợp với mục tiêu sức khỏe của bạn.
             </p>
-            <Link to="/login" className="text-[#00C78C] hover:text-[#00E6A0] flex items-center gap-2">
+            <button 
+              onClick={() => handleFeatureClick('/user/nutrition/calorie-calculator')}
+              className="text-[#00C78C] hover:text-[#00E6A0] flex items-center gap-2"
+            >
               <span style={{ fontWeight: 600 }}>Khám phá</span>
               <ArrowRight className="w-4 h-4" />
-            </Link>
+            </button>
           </Card>
 
           {/* Move Better */}
@@ -64,10 +91,13 @@ export function HomePage() {
             <p className="text-gray-600 mb-6">
               Bài tập thể dục được cá nhân hóa theo thể trạng và mục tiêu của bạn. Duy trì vóc dáng và sức khỏe tốt nhất.
             </p>
-            <Link to="/login" className="text-[#00C78C] hover:text-[#00E6A0] flex items-center gap-2">
+            <button 
+              onClick={() => handleFeatureClick('/user/fitness/exercise-plans')}
+              className="text-[#00C78C] hover:text-[#00E6A0] flex items-center gap-2"
+            >
               <span style={{ fontWeight: 600 }}>Khám phá</span>
               <ArrowRight className="w-4 h-4" />
-            </Link>
+            </button>
           </Card>
 
           {/* Rest Well */}
@@ -79,10 +109,13 @@ export function HomePage() {
             <p className="text-gray-600 mb-6">
               Theo dõi giấc ngủ, nhắc nhở uống nước và ghi chú hoạt động hàng ngày để xây dựng lối sống lành mạnh.
             </p>
-            <Link to="/login" className="text-[#00C78C] hover:text-[#00E6A0] flex items-center gap-2">
+            <button 
+              onClick={() => handleFeatureClick('/user/wellness/sleep-tracker')}
+              className="text-[#00C78C] hover:text-[#00E6A0] flex items-center gap-2"
+            >
               <span style={{ fontWeight: 600 }}>Khám phá</span>
               <ArrowRight className="w-4 h-4" />
-            </Link>
+            </button>
           </Card>
         </div>
       </section>

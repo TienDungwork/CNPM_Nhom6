@@ -1,11 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext';
+import { DataProvider } from './components/DataContext';
 import { HomePage } from './components/HomePage';
 import { LoginPage } from './components/LoginPage';
 import { SignUpPage } from './components/SignUpPage';
 import { UserDashboard } from './components/UserDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
 import { DashboardHome } from './components/user/DashboardHome';
+import { DailyPlanner } from './components/user/DailyPlanner';
 import { CalorieCalculator } from './components/user/CalorieCalculator';
 import { MealSuggestions } from './components/user/MealSuggestions';
 import { ExercisePlans } from './components/user/ExercisePlans';
@@ -14,7 +16,12 @@ import { WaterReminder } from './components/user/WaterReminder';
 import { ActivityLog } from './components/user/ActivityLog';
 import { Chatbot } from './components/user/Chatbot';
 import { Feedback } from './components/user/Feedback';
+import { ForgotPasswordPage } from './components/ForgotPasswordPage';
 import { AdminHome } from './components/admin/AdminHome';
+import { UserManagement } from './components/admin/UserManagement';
+import { ContentManagement } from './components/admin/ContentManagement';
+import { FeedbackReview } from './components/admin/FeedbackReview';
+import { Statistics } from './components/admin/Statistics';
 import { Toaster } from './components/ui/sonner';
 
 function ProtectedRoute({ children, requiredRole }: { children: React.ReactNode; requiredRole?: 'user' | 'admin' }) {
@@ -37,6 +44,7 @@ function AppRoutes() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignUpPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       
       {/* User Routes */}
       <Route path="/user" element={
@@ -45,6 +53,7 @@ function AppRoutes() {
         </ProtectedRoute>
       }>
         <Route path="dashboard" element={<DashboardHome />} />
+        <Route path="planner" element={<DailyPlanner />} />
         <Route path="nutrition/calorie-calculator" element={<CalorieCalculator />} />
         <Route path="nutrition/meal-suggestions" element={<MealSuggestions />} />
         <Route path="fitness/exercise-plans" element={<ExercisePlans />} />
@@ -63,30 +72,10 @@ function AppRoutes() {
         </ProtectedRoute>
       }>
         <Route path="dashboard" element={<AdminHome />} />
-        <Route path="users" element={
-          <div className="text-center py-12 text-gray-500">
-            <p style={{ fontSize: '1.25rem' }}>User Management</p>
-            <p className="mt-2">User management features will be displayed here</p>
-          </div>
-        } />
-        <Route path="content" element={
-          <div className="text-center py-12 text-gray-500">
-            <p style={{ fontSize: '1.25rem' }}>Content Management</p>
-            <p className="mt-2">Content management features will be displayed here</p>
-          </div>
-        } />
-        <Route path="feedback" element={
-          <div className="text-center py-12 text-gray-500">
-            <p style={{ fontSize: '1.25rem' }}>Feedback Review</p>
-            <p className="mt-2">User feedback review features will be displayed here</p>
-          </div>
-        } />
-        <Route path="statistics" element={
-          <div className="text-center py-12 text-gray-500">
-            <p style={{ fontSize: '1.25rem' }}>Statistics Overview</p>
-            <p className="mt-2">Detailed statistics and analytics will be displayed here</p>
-          </div>
-        } />
+        <Route path="users" element={<UserManagement />} />
+        <Route path="content" element={<ContentManagement />} />
+        <Route path="feedback" element={<FeedbackReview />} />
+        <Route path="statistics" element={<Statistics />} />
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
       </Route>
 
@@ -100,8 +89,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
-        <Toaster />
+        <DataProvider>
+          <AppRoutes />
+          <Toaster />
+        </DataProvider>
       </AuthProvider>
     </BrowserRouter>
   );

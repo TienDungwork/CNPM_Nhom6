@@ -1,29 +1,76 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import { useData } from './DataContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Checkbox } from './ui/checkbox';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { Leaf } from 'lucide-react';
+import { toast } from 'sonner@2.0.3';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { users } = useData();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({ email: '', password: '', general: '' });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({ email: '', password: '', general: '' });
+    
+    // Validation
+    if (!email) {
+      setErrors(prev => ({ ...prev, email: 'Vui lòng nhập email.' }));
+      return;
+    }
+    
+    if (!validateEmail(email)) {
+      setErrors(prev => ({ ...prev, email: 'Email không hợp lệ. Vui lòng nhập lại địa chỉ email.' }));
+      return;
+    }
+    
+    if (!password) {
+      setErrors(prev => ({ ...prev, password: 'Vui lòng nhập mật khẩu.' }));
+      return;
+    }
+
+    setIsLoading(true);
+    
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Check if user exists
+    const user = users.find(u => u.email === email);
+    
+    if (!user) {
+      setErrors(prev => ({ ...prev, general: 'Tài khoản hoặc mật khẩu không chính xác.' }));
+      toast.error('Login failed!');
+      setIsLoading(false);
+      return;
+    }
     
     // Mock authentication
-    if (email.includes('admin')) {
-      login('admin', 'Admin User');
+    if (user.role === 'admin') {
+      login('admin', user.name);
+      toast.success('Welcome back, Admin!');
       navigate('/admin/dashboard');
     } else {
-      login('user', email.split('@')[0]);
+      login('user', user.name);
+      toast.success('Successfully logged in!');
       navigate('/user/dashboard');
     }
+    
+    setIsLoading(false);
   };
 
   const handleSocialLogin = (provider: string) => {
@@ -45,7 +92,14 @@ export function LoginPage() {
       </div>
 
       {/* Right side - Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white">
+      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-8 bg-white">
+        {/* Logo - Link to Home */}
+        <Link to="/" className="absolute top-8 left-8 flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center">
+            <Leaf className="w-5 h-5 text-white" />
+          </div>
+          <span className="text-gray-900" style={{ fontWeight: 600 }}>HealthyColors</span>
+        </Link>
         <div className="w-full max-w-md">
           <div className="mb-8">
             <h1 className="mb-2" style={{ fontSize: '2rem', fontWeight: 600 }}>Welcome back</h1>
@@ -53,6 +107,13 @@ export function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {errors.general && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+                <span className="text-red-600">⚠️</span>
+                <span className="text-red-700" style={{ fontSize: '0.875rem' }}>{errors.general}</span>
+              </div>
+            )}
+
             <div>
               <Label htmlFor="email">Email</Label>
               <Input
@@ -60,10 +121,17 @@ export function LoginPage() {
                 type="email"
                 placeholder="Enter your email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-2 rounded-lg"
-                required
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setErrors(prev => ({ ...prev, email: '', general: '' }));
+                }}
+                className={`mt-2 rounded-lg ${errors.email ? 'border-red-500' : ''}`}
               />
+              {errors.email && (
+                <div className="flex items-center gap-2 mt-2 text-red-600">
+                  <span style={{ fontSize: '0.875rem' }}>⚠️ {errors.email}</span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -73,10 +141,17 @@ export function LoginPage() {
                 type="password"
                 placeholder="Enter your password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-2 rounded-lg"
-                required
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setErrors(prev => ({ ...prev, password: '', general: '' }));
+                }}
+                className={`mt-2 rounded-lg ${errors.password ? 'border-red-500' : ''}`}
               />
+              {errors.password && (
+                <div className="flex items-center gap-2 mt-2 text-red-600">
+                  <span style={{ fontSize: '0.875rem' }}>⚠️ {errors.password}</span>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between">
@@ -91,8 +166,12 @@ export function LoginPage() {
               </Link>
             </div>
 
-            <Button type="submit" className="w-full gradient-primary text-white border-0 rounded-lg py-6">
-              Sign in
+            <Button 
+              type="submit" 
+              className="w-full gradient-primary text-white border-0 rounded-lg py-6"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>
 

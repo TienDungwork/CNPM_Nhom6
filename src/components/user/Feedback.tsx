@@ -4,9 +4,14 @@ import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { useAuth } from '../AuthContext';
+import { useData } from '../DataContext';
 import { MessageSquare, Send, CheckCircle } from 'lucide-react';
+import { toast } from 'sonner@2.0.3';
 
 export function Feedback() {
+  const { userName } = useAuth();
+  const { addFeedback, addActivityLog } = useData();
   const [category, setCategory] = useState('');
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -14,9 +19,28 @@ export function Feedback() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!category || !message.trim()) {
-      alert('Please fill in all fields');
+      toast.error('Please fill in all fields');
       return;
     }
+
+    // Add feedback to backend
+    const feedbackId = addFeedback({
+      userId: '1', // Mock user ID
+      userName: userName || 'User',
+      category,
+      message,
+    });
+
+    // Add activity log
+    addActivityLog({
+      userId: '1',
+      type: 'feedback',
+      title: 'Sent feedback to admin',
+      details: `Category: ${category}`,
+      timestamp: new Date().toISOString(),
+    });
+
+    toast.success('Feedback sent successfully! Admin will review it soon.');
     setSubmitted(true);
     setTimeout(() => {
       setSubmitted(false);

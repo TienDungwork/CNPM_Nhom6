@@ -1,6 +1,8 @@
 import { Card } from '../ui/card';
 import { Users, FileText, MessageSquare, TrendingUp, Activity } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { useData } from '../DataContext';
+import { Badge } from '../ui/badge';
 
 const userGrowthData = [
   { month: 'Jan', users: 120 },
@@ -22,6 +24,10 @@ const activityData = [
 ];
 
 export function AdminHome() {
+  const { getStatistics, getRecentUsers, feedbacks } = useData();
+  const stats = getStatistics();
+  const recentUsers = getRecentUsers(3);
+
   return (
     <div className="space-y-8">
       <div>
@@ -36,11 +42,15 @@ export function AdminHome() {
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-400 flex items-center justify-center">
               <Users className="w-6 h-6 text-white" />
             </div>
-            <span className="text-green-600" style={{ fontSize: '0.875rem', fontWeight: 600 }}>+12%</span>
+            <span className="text-green-600" style={{ fontSize: '0.875rem', fontWeight: 600 }}>
+              {stats.totalUsers > 0 ? '+' + Math.round((stats.totalUsers / 50) * 100) : '0'}%
+            </span>
           </div>
           <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Total Users</p>
-          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>520</p>
-          <p className="text-gray-500 mt-1" style={{ fontSize: '0.75rem' }}>45 new this week</p>
+          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>{stats.totalUsers}</p>
+          <p className="text-gray-500 mt-1" style={{ fontSize: '0.75rem' }}>
+            {recentUsers.length} new this week
+          </p>
         </Card>
 
         <Card className="p-6 rounded-xl border-0 shadow-md">
@@ -48,11 +58,15 @@ export function AdminHome() {
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-400 flex items-center justify-center">
               <Activity className="w-6 h-6 text-white" />
             </div>
-            <span className="text-green-600" style={{ fontSize: '0.875rem', fontWeight: 600 }}>+8%</span>
+            <span className="text-green-600" style={{ fontSize: '0.875rem', fontWeight: 600 }}>
+              {stats.totalUsers > 0 ? Math.round((stats.activeUsers / stats.totalUsers) * 100) : 0}%
+            </span>
           </div>
-          <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Active Today</p>
-          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>342</p>
-          <p className="text-gray-500 mt-1" style={{ fontSize: '0.75rem' }}>66% engagement rate</p>
+          <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Active Users</p>
+          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>{stats.activeUsers}</p>
+          <p className="text-gray-500 mt-1" style={{ fontSize: '0.75rem' }}>
+            {stats.totalUsers > 0 ? Math.round((stats.activeUsers / stats.totalUsers) * 100) : 0}% engagement rate
+          </p>
         </Card>
 
         <Card className="p-6 rounded-xl border-0 shadow-md">
@@ -60,11 +74,15 @@ export function AdminHome() {
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-orange-400 flex items-center justify-center">
               <FileText className="w-6 h-6 text-white" />
             </div>
-            <span className="text-blue-600" style={{ fontSize: '0.875rem', fontWeight: 600 }}>124</span>
+            <span className="text-blue-600" style={{ fontSize: '0.875rem', fontWeight: 600 }}>
+              {stats.totalExercises}
+            </span>
           </div>
           <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Content Items</p>
-          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>856</p>
-          <p className="text-gray-500 mt-1" style={{ fontSize: '0.75rem' }}>Meals, exercises, articles</p>
+          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>{stats.totalExercises + 24}</p>
+          <p className="text-gray-500 mt-1" style={{ fontSize: '0.75rem' }}>
+            {stats.totalExercises} exercises, 24 meals
+          </p>
         </Card>
 
         <Card className="p-6 rounded-xl border-0 shadow-md">
@@ -72,11 +90,17 @@ export function AdminHome() {
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-400 flex items-center justify-center">
               <MessageSquare className="w-6 h-6 text-white" />
             </div>
-            <span className="text-orange-600" style={{ fontSize: '0.875rem', fontWeight: 600 }}>18 new</span>
+            {stats.pendingFeedbacks > 0 && (
+              <Badge className="bg-orange-100 text-orange-700">
+                {stats.pendingFeedbacks} new
+              </Badge>
+            )}
           </div>
           <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Feedback</p>
-          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>127</p>
-          <p className="text-gray-500 mt-1" style={{ fontSize: '0.75rem' }}>12 pending review</p>
+          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>{stats.totalFeedbacks}</p>
+          <p className="text-gray-500 mt-1" style={{ fontSize: '0.75rem' }}>
+            {stats.pendingFeedbacks} pending review
+          </p>
         </Card>
       </div>
 
@@ -128,40 +152,46 @@ export function AdminHome() {
       {/* Recent Activity */}
       <Card className="p-6 rounded-xl border-0 shadow-md">
         <h3 className="mb-6" style={{ fontWeight: 600 }}>Recent Activity</h3>
-        <div className="space-y-4">
-          <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-              <Users className="w-5 h-5 text-green-600" />
-            </div>
-            <div className="flex-1">
-              <p style={{ fontWeight: 600 }}>New user registration</p>
-              <p className="text-gray-600" style={{ fontSize: '0.875rem' }}>user@example.com joined the platform</p>
-            </div>
-            <span className="text-gray-500" style={{ fontSize: '0.875rem' }}>5 min ago</span>
+        {recentUsers.length === 0 && feedbacks.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <Activity className="w-12 h-12 mx-auto mb-2 opacity-20" />
+            <p style={{ fontSize: '0.875rem' }}>No recent activity</p>
           </div>
+        ) : (
+          <div className="space-y-4">
+            {recentUsers.slice(0, 2).map((user) => (
+              <div key={user.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="flex-1">
+                  <p style={{ fontWeight: 600 }}>New user registration</p>
+                  <p className="text-gray-600" style={{ fontSize: '0.875rem' }}>{user.email} joined the platform</p>
+                </div>
+                <span className="text-gray-500" style={{ fontSize: '0.875rem' }}>
+                  {new Date(user.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+            ))}
 
-          <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-              <MessageSquare className="w-5 h-5 text-purple-600" />
-            </div>
-            <div className="flex-1">
-              <p style={{ fontWeight: 600 }}>New feedback submitted</p>
-              <p className="text-gray-600" style={{ fontSize: '0.875rem' }}>Feature request: Dark mode</p>
-            </div>
-            <span className="text-gray-500" style={{ fontSize: '0.875rem' }}>12 min ago</span>
+            {feedbacks.slice(0, 2).map((feedback) => (
+              <div key={feedback.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                  <MessageSquare className="w-5 h-5 text-purple-600" />
+                </div>
+                <div className="flex-1">
+                  <p style={{ fontWeight: 600 }}>New feedback submitted</p>
+                  <p className="text-gray-600" style={{ fontSize: '0.875rem' }}>
+                    {feedback.category}: {feedback.message.substring(0, 50)}...
+                  </p>
+                </div>
+                {feedback.status === 'Pending' && (
+                  <Badge className="bg-yellow-100 text-yellow-700">New</Badge>
+                )}
+              </div>
+            ))}
           </div>
-
-          <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-            <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-orange-600" />
-            </div>
-            <div className="flex-1">
-              <p style={{ fontWeight: 600 }}>Content updated</p>
-              <p className="text-gray-600" style={{ fontSize: '0.875rem' }}>New meal plan added to library</p>
-            </div>
-            <span className="text-gray-500" style={{ fontSize: '0.875rem' }}>1 hour ago</span>
-          </div>
-        </div>
+        )}
       </Card>
     </div>
   );

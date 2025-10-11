@@ -1,29 +1,82 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import { useData } from './DataContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { Leaf } from 'lucide-react';
+import { toast } from 'sonner@2.0.3';
 
 export function SignUpPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { addUser, users } = useData();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({ email: '', password: '', confirmPassword: '' });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({ email: '', password: '', confirmPassword: '' });
+    
+    // Validation
+    if (!email) {
+      setErrors(prev => ({ ...prev, email: 'Vui lòng nhập email.' }));
+      return;
+    }
+    
+    if (!validateEmail(email)) {
+      setErrors(prev => ({ ...prev, email: 'Email không hợp lệ. Vui lòng nhập lại địa chỉ email.' }));
+      return;
+    }
+    
+    // Check if email already exists
+    if (users.some(u => u.email === email)) {
+      setErrors(prev => ({ ...prev, email: 'Email này đã được sử dụng.' }));
+      toast.error('Email already exists!');
+      return;
+    }
+    
+    if (!password || password.length < 6) {
+      setErrors(prev => ({ ...prev, password: 'Mật khẩu phải có ít nhất 6 ký tự.' }));
+      return;
+    }
     
     if (password !== confirmPassword) {
-      alert('Passwords do not match!');
+      setErrors(prev => ({ ...prev, confirmPassword: 'Mật khẩu xác nhận không khớp.' }));
+      toast.error('Passwords do not match!');
       return;
     }
 
+    setIsLoading(true);
+    
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Add user to backend
+    const userName = email.split('@')[0];
+    addUser({
+      name: userName,
+      email,
+      role: 'user',
+      isActive: true,
+    });
+    
     // Mock registration
-    login('user', email.split('@')[0]);
+    login('user', userName);
+    toast.success('Account created successfully!');
     navigate('/user/dashboard');
+    
+    setIsLoading(false);
   };
 
   const handleSocialSignUp = (provider: string) => {
@@ -44,7 +97,14 @@ export function SignUpPage() {
       </div>
 
       {/* Right side - Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white">
+      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-8 bg-white">
+        {/* Logo - Link to Home */}
+        <Link to="/" className="absolute top-8 left-8 flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center">
+            <Leaf className="w-5 h-5 text-white" />
+          </div>
+          <span className="text-gray-900" style={{ fontWeight: 600 }}>HealthyColors</span>
+        </Link>
         <div className="w-full max-w-md">
           <div className="mb-8">
             <h1 className="mb-2" style={{ fontSize: '2rem', fontWeight: 600 }}>Create an account</h1>
@@ -59,10 +119,17 @@ export function SignUpPage() {
                 type="email"
                 placeholder="Enter your email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-2 rounded-lg"
-                required
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setErrors(prev => ({ ...prev, email: '' }));
+                }}
+                className={`mt-2 rounded-lg ${errors.email ? 'border-red-500' : ''}`}
               />
+              {errors.email && (
+                <div className="flex items-center gap-2 mt-2 text-red-600">
+                  <span style={{ fontSize: '0.875rem' }}>⚠️ {errors.email}</span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -70,12 +137,19 @@ export function SignUpPage() {
               <Input
                 id="password"
                 type="password"
-                placeholder="Create a password"
+                placeholder="Create a password (min 6 characters)"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-2 rounded-lg"
-                required
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setErrors(prev => ({ ...prev, password: '' }));
+                }}
+                className={`mt-2 rounded-lg ${errors.password ? 'border-red-500' : ''}`}
               />
+              {errors.password && (
+                <div className="flex items-center gap-2 mt-2 text-red-600">
+                  <span style={{ fontSize: '0.875rem' }}>⚠️ {errors.password}</span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -85,14 +159,25 @@ export function SignUpPage() {
                 type="password"
                 placeholder="Confirm your password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-2 rounded-lg"
-                required
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  setErrors(prev => ({ ...prev, confirmPassword: '' }));
+                }}
+                className={`mt-2 rounded-lg ${errors.confirmPassword ? 'border-red-500' : ''}`}
               />
+              {errors.confirmPassword && (
+                <div className="flex items-center gap-2 mt-2 text-red-600">
+                  <span style={{ fontSize: '0.875rem' }}>⚠️ {errors.confirmPassword}</span>
+                </div>
+              )}
             </div>
 
-            <Button type="submit" className="w-full gradient-primary text-white border-0 rounded-lg py-6">
-              Create Account
+            <Button 
+              type="submit" 
+              className="w-full gradient-primary text-white border-0 rounded-lg py-6"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Creating Account...' : 'Create Account'}
             </Button>
           </form>
 

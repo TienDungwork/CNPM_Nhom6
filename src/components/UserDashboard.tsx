@@ -19,6 +19,7 @@ import {
   UtensilsCrossed,
   Home,
   Leaf,
+  Calendar,
 } from 'lucide-react';
 
 export function UserDashboard() {
@@ -30,6 +31,11 @@ export function UserDashboard() {
       title: 'Dashboard',
       icon: Home,
       href: '/user/dashboard',
+    },
+    {
+      title: 'Daily Planner',
+      icon: Calendar,
+      href: '/user/planner',
     },
     {
       title: 'Nutrition',
