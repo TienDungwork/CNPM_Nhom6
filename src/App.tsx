@@ -9,8 +9,8 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { DashboardHome } from './components/user/DashboardHome';
 import { DailyPlanner } from './components/user/DailyPlanner';
 import { CalorieCalculator } from './components/user/CalorieCalculator';
-import { MealSuggestions } from './components/user/MealSuggestions';
-import { ExercisePlans } from './components/user/ExercisePlans';
+import { MealSuggestionsNew } from './components/user/MealSuggestionsNew';
+import { ExercisePlansNew } from './components/user/ExercisePlansNew';
 import { SleepTracker } from './components/user/SleepTracker';
 import { WaterReminder } from './components/user/WaterReminder';
 import { ActivityLog } from './components/user/ActivityLog';
@@ -20,6 +20,8 @@ import { ForgotPasswordPage } from './components/ForgotPasswordPage';
 import { AdminHome } from './components/admin/AdminHome';
 import { UserManagement } from './components/admin/UserManagement';
 import { ContentManagement } from './components/admin/ContentManagement';
+import { MealManagement } from './components/admin/MealManagement';
+import { ExerciseManagement } from './components/admin/ExerciseManagement';
 import { FeedbackReview } from './components/admin/FeedbackReview';
 import { Statistics } from './components/admin/Statistics';
 import { Toaster } from './components/ui/sonner';
@@ -55,8 +57,8 @@ function AppRoutes() {
         <Route path="dashboard" element={<DashboardHome />} />
         <Route path="planner" element={<DailyPlanner />} />
         <Route path="nutrition/calorie-calculator" element={<CalorieCalculator />} />
-        <Route path="nutrition/meal-suggestions" element={<MealSuggestions />} />
-        <Route path="fitness/exercise-plans" element={<ExercisePlans />} />
+        <Route path="nutrition/meal-suggestions" element={<MealSuggestionsNew />} />
+        <Route path="fitness/exercise-plans" element={<ExercisePlansNew />} />
         <Route path="wellness/sleep-tracker" element={<SleepTracker />} />
         <Route path="wellness/water-reminder" element={<WaterReminder />} />
         <Route path="wellness/activity-log" element={<ActivityLog />} />
@@ -74,6 +76,8 @@ function AppRoutes() {
         <Route path="dashboard" element={<AdminHome />} />
         <Route path="users" element={<UserManagement />} />
         <Route path="content" element={<ContentManagement />} />
+        <Route path="meal-management" element={<MealManagement />} />
+        <Route path="exercise-management" element={<ExerciseManagement />} />
         <Route path="feedback" element={<FeedbackReview />} />
         <Route path="statistics" element={<Statistics />} />
         <Route index element={<Navigate to="/admin/dashboard" replace />} />

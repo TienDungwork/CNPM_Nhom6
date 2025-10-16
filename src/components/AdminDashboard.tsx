@@ -14,6 +14,8 @@ import {
   BarChart3,
   Home,
   Leaf,
+  Apple,
+  Dumbbell,
 } from 'lucide-react';
 
 export function AdminDashboard() {
@@ -35,6 +37,16 @@ export function AdminDashboard() {
       title: 'Content Management',
       icon: FileText,
       href: '/admin/content',
+    },
+    {
+      title: 'Meal Management',
+      icon: Apple,
+      href: '/admin/meal-management',
+    },
+    {
+      title: 'Exercise Management',
+      icon: Dumbbell,
+      href: '/admin/exercise-management',
     },
     {
       title: 'Feedback Review',

@@ -10,6 +10,41 @@ export interface User {
   isActive: boolean;
 }
 
+export interface Meal {
+  id: string;
+  name: string;
+  calories: number;
+  type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  protein: number;
+  carbs: number;
+  fat: number;
+  image: string;
+  ingredients: string[];
+  steps: string[];
+  prepTime: number;
+  source: 'admin' | 'user';
+  creatorId?: string;
+  status: 'public' | 'hidden' | 'pending';
+}
+
+export interface UserMeal {
+  id: string;
+  userId: string;
+  baseMealId?: string;
+  name: string;
+  calories: number;
+  type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  protein: number;
+  carbs: number;
+  fat: number;
+  image: string;
+  ingredients: string[];
+  steps: string[];
+  prepTime: number;
+  source: 'copy' | 'custom';
+  createdAt: string;
+}
+
 export interface MealPlan {
   id: string;
   userId: string;
@@ -22,12 +57,32 @@ export interface MealPlan {
 export interface Exercise {
   id: string;
   title: string;
-  type: string;
+  muscleGroup: string;
   duration: number;
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
   caloriesBurned: number;
   image: string;
   description: string;
+  steps: string[];
+  source: 'admin' | 'user';
+  creatorId?: string;
+  status: 'public' | 'hidden' | 'pending';
+}
+
+export interface UserExercise {
+  id: string;
+  userId: string;
+  baseExerciseId?: string;
+  title: string;
+  muscleGroup: string;
+  duration: number;
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  caloriesBurned: number;
+  image: string;
+  description: string;
+  steps: string[];
+  source: 'copy' | 'custom';
+  createdAt: string;
 }
 
 export interface SleepCycle {
@@ -81,15 +136,30 @@ export interface DailyPlanner {
 
 interface DataContextType {
   users: User[];
-  mealPlans: MealPlan[];
+  meals: Meal[];
+  userMeals: UserMeal[];
   exercises: Exercise[];
+  userExercises: UserExercise[];
+  mealPlans: MealPlan[];
   sleepCycles: SleepCycle[];
   waterLogs: WaterLog[];
   feedbacks: Feedback[];
   activityLogs: ActivityLog[];
   dailyPlanners: DailyPlanner[];
   
-  // User actions
+  // User actions - Meals
+  addUserMeal: (meal: Omit<UserMeal, 'id' | 'createdAt'>) => void;
+  updateUserMeal: (mealId: string, updates: Partial<UserMeal>) => void;
+  deleteUserMeal: (mealId: string) => void;
+  copyMealToUser: (userId: string, mealId: string) => void;
+  
+  // User actions - Exercises
+  addUserExercise: (exercise: Omit<UserExercise, 'id' | 'createdAt'>) => void;
+  updateUserExercise: (exerciseId: string, updates: Partial<UserExercise>) => void;
+  deleteUserExercise: (exerciseId: string) => void;
+  copyExerciseToUser: (userId: string, exerciseId: string) => void;
+  
+  // User actions - Other
   addMealPlan: (mealPlan: Omit<MealPlan, 'id'>) => void;
   addSleepCycle: (sleepCycle: Omit<SleepCycle, 'id'>) => void;
   updateWaterLog: (userId: string, cups: number) => void;
@@ -105,12 +175,23 @@ interface DataContextType {
   deleteUser: (userId: string) => void;
   updateUserStatus: (userId: string, isActive: boolean) => void;
   updateFeedbackStatus: (feedbackId: string, status: Feedback['status']) => void;
+  
+  // Admin - Meals
+  addMeal: (meal: Omit<Meal, 'id'>) => void;
+  updateMeal: (mealId: string, updates: Partial<Meal>) => void;
+  deleteMeal: (mealId: string) => void;
+  
+  // Admin - Exercises
   addExercise: (exercise: Omit<Exercise, 'id'>) => void;
+  updateExercise: (exerciseId: string, updates: Partial<Exercise>) => void;
+  deleteExercise: (exerciseId: string) => void;
   
   // Getters
   getUserById: (userId: string) => User | undefined;
   getUserFeedbacks: (userId: string) => Feedback[];
   getUserPlanners: (userId: string, date?: string) => DailyPlanner[];
+  getUserMeals: (userId: string) => UserMeal[];
+  getUserExercises: (userId: string) => UserExercise[];
   getPendingFeedbacksCount: () => number;
   getRecentUsers: (count: number) => User[];
   getStatistics: () => {
@@ -118,7 +199,7 @@ interface DataContextType {
     activeUsers: number;
     totalFeedbacks: number;
     pendingFeedbacks: number;
-    totalMealPlans: number;
+    totalMeals: number;
     totalExercises: number;
   };
 }
@@ -146,19 +227,125 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
   ]);
 
+  const [meals, setMeals] = useState<Meal[]>([
+    {
+      id: '1',
+      name: 'Quinoa Buddha Bowl',
+      calories: 450,
+      type: 'lunch',
+      protein: 18,
+      carbs: 62,
+      fat: 12,
+      image: 'https://images.unsplash.com/photo-1643750182373-b4a55a8c2801?w=400',
+      ingredients: ['Quinoa', 'Chickpeas', 'Avocado', 'Spinach', 'Cherry tomatoes', 'Olive oil', 'Lemon'],
+      steps: ['Cook quinoa according to package', 'Roast chickpeas with spices', 'Prepare vegetables', 'Assemble bowl with all ingredients', 'Drizzle with olive oil and lemon'],
+      prepTime: 25,
+      source: 'admin',
+      status: 'public',
+    },
+    {
+      id: '2',
+      name: 'Overnight Oats with Berries',
+      calories: 320,
+      type: 'breakfast',
+      protein: 12,
+      carbs: 48,
+      fat: 8,
+      image: 'https://images.unsplash.com/photo-1562059390-a761a084768e?w=400',
+      ingredients: ['Oats', 'Almond milk', 'Blueberries', 'Strawberries', 'Honey', 'Chia seeds', 'Almonds'],
+      steps: ['Mix oats with almond milk', 'Add chia seeds and honey', 'Refrigerate overnight', 'Top with fresh berries and almonds'],
+      prepTime: 5,
+      source: 'admin',
+      status: 'public',
+    },
+    {
+      id: '3',
+      name: 'Grilled Chicken & Vegetables',
+      calories: 520,
+      type: 'dinner',
+      protein: 45,
+      carbs: 32,
+      fat: 18,
+      image: 'https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=400',
+      ingredients: ['Chicken breast', 'Broccoli', 'Bell peppers', 'Zucchini', 'Olive oil', 'Garlic', 'Herbs'],
+      steps: ['Marinate chicken with herbs and garlic', 'Grill chicken until cooked', 'Sauté vegetables', 'Serve together'],
+      prepTime: 30,
+      source: 'admin',
+      status: 'public',
+    },
+    {
+      id: '4',
+      name: 'Greek Yogurt Parfait',
+      calories: 280,
+      type: 'snack',
+      protein: 20,
+      carbs: 35,
+      fat: 6,
+      image: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400',
+      ingredients: ['Greek yogurt', 'Granola', 'Mixed berries', 'Honey', 'Walnuts'],
+      steps: ['Layer yogurt in glass', 'Add granola and berries', 'Drizzle with honey', 'Top with walnuts'],
+      prepTime: 5,
+      source: 'admin',
+      status: 'public',
+    },
+  ]);
+  const [userMeals, setUserMeals] = useState<UserMeal[]>([]);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([
     {
       id: '1',
       title: 'Full Body Strength',
-      type: 'Strength',
+      muscleGroup: 'Full Body',
       duration: 45,
       difficulty: 'Intermediate',
       caloriesBurned: 320,
-      image: 'https://images.unsplash.com/photo-1634788699201-77bbb9428ab6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmaXRuZXNzJTIwZXhlcmNpc2V8ZW58MXx8fHwxNzYwMDU5MDYyfDA&ixlib=rb-4.1.0&q=80&w=1080',
-      description: 'Complete workout targeting all major muscle groups',
+      image: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=400',
+      description: 'Complete workout targeting all major muscle groups with compound movements',
+      steps: ['Warm up for 5 minutes', 'Perform 10 squats', 'Do 10 push-ups', 'Complete 10 lunges each leg', 'Rest 60 seconds', 'Repeat for 3 sets', 'Cool down and stretch'],
+      source: 'admin',
+      status: 'public',
+    },
+    {
+      id: '2',
+      title: 'Morning Yoga Flow',
+      muscleGroup: 'Flexibility',
+      duration: 20,
+      difficulty: 'Beginner',
+      caloriesBurned: 80,
+      image: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400',
+      description: 'Gentle yoga sequence to start your day with energy and flexibility',
+      steps: ['Begin in mountain pose', 'Sun salutation A', 'Warrior sequence', 'Triangle pose', 'Seated forward fold', 'Finish with savasana'],
+      source: 'admin',
+      status: 'public',
+    },
+    {
+      id: '3',
+      title: 'HIIT Cardio Blast',
+      muscleGroup: 'Cardio',
+      duration: 30,
+      difficulty: 'Advanced',
+      caloriesBurned: 450,
+      image: 'https://images.unsplash.com/photo-1601422407692-ec4eeec1d9b3?w=400',
+      description: 'High-intensity interval training for maximum calorie burn',
+      steps: ['Warm up jogging', '30sec burpees', '30sec rest', '30sec jump squats', '30sec rest', '30sec mountain climbers', 'Repeat 5 rounds', 'Cool down'],
+      source: 'admin',
+      status: 'public',
+    },
+    {
+      id: '4',
+      title: 'Core Strengthening',
+      muscleGroup: 'Core',
+      duration: 15,
+      difficulty: 'Beginner',
+      caloriesBurned: 100,
+      image: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=400',
+      description: 'Focused ab workout for building core strength',
+      steps: ['Plank hold 30 seconds', 'Crunches 15 reps', 'Bicycle crunches 20 reps', 'Leg raises 10 reps', 'Rest 30 seconds', 'Repeat 3 times'],
+      source: 'admin',
+      status: 'public',
     },
   ]);
+  const [userExercises, setUserExercises] = useState<UserExercise[]>([]);
   
   const [sleepCycles, setSleepCycles] = useState<SleepCycle[]>([]);
   const [waterLogs, setWaterLogs] = useState<WaterLog[]>([]);
@@ -170,8 +357,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const data = {
       users,
-      mealPlans,
+      meals,
+      userMeals,
       exercises,
+      userExercises,
+      mealPlans,
       sleepCycles,
       waterLogs,
       feedbacks,
@@ -179,7 +369,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       dailyPlanners,
     };
     localStorage.setItem('healthyColorsData', JSON.stringify(data));
-  }, [users, mealPlans, exercises, sleepCycles, waterLogs, feedbacks, activityLogs, dailyPlanners]);
+  }, [users, meals, userMeals, exercises, userExercises, mealPlans, sleepCycles, waterLogs, feedbacks, activityLogs, dailyPlanners]);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -188,8 +378,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       try {
         const data = JSON.parse(stored);
         if (data.users) setUsers(data.users);
-        if (data.mealPlans) setMealPlans(data.mealPlans);
+        if (data.meals && data.meals.length > 0) setMeals(data.meals);
+        if (data.userMeals) setUserMeals(data.userMeals);
         if (data.exercises && data.exercises.length > 0) setExercises(data.exercises);
+        if (data.userExercises) setUserExercises(data.userExercises);
+        if (data.mealPlans) setMealPlans(data.mealPlans);
         if (data.sleepCycles) setSleepCycles(data.sleepCycles);
         if (data.waterLogs) setWaterLogs(data.waterLogs);
         if (data.feedbacks) setFeedbacks(data.feedbacks);
@@ -295,9 +488,120 @@ export function DataProvider({ children }: { children: ReactNode }) {
     ));
   };
 
+  // User Meal actions
+  const addUserMeal = (meal: Omit<UserMeal, 'id' | 'createdAt'>) => {
+    const newMeal: UserMeal = {
+      ...meal,
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString(),
+    };
+    setUserMeals([...userMeals, newMeal]);
+  };
+
+  const updateUserMeal = (mealId: string, updates: Partial<UserMeal>) => {
+    setUserMeals(userMeals.map(meal =>
+      meal.id === mealId ? { ...meal, ...updates } : meal
+    ));
+  };
+
+  const deleteUserMeal = (mealId: string) => {
+    setUserMeals(userMeals.filter(meal => meal.id !== mealId));
+  };
+
+  const copyMealToUser = (userId: string, mealId: string) => {
+    const baseMeal = meals.find(m => m.id === mealId);
+    if (!baseMeal) return;
+
+    const userMeal: Omit<UserMeal, 'id' | 'createdAt'> = {
+      userId,
+      baseMealId: mealId,
+      name: baseMeal.name,
+      calories: baseMeal.calories,
+      type: baseMeal.type,
+      protein: baseMeal.protein,
+      carbs: baseMeal.carbs,
+      fat: baseMeal.fat,
+      image: baseMeal.image,
+      ingredients: [...baseMeal.ingredients],
+      steps: [...baseMeal.steps],
+      prepTime: baseMeal.prepTime,
+      source: 'copy',
+    };
+
+    addUserMeal(userMeal);
+  };
+
+  // User Exercise actions
+  const addUserExercise = (exercise: Omit<UserExercise, 'id' | 'createdAt'>) => {
+    const newExercise: UserExercise = {
+      ...exercise,
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString(),
+    };
+    setUserExercises([...userExercises, newExercise]);
+  };
+
+  const updateUserExercise = (exerciseId: string, updates: Partial<UserExercise>) => {
+    setUserExercises(userExercises.map(ex =>
+      ex.id === exerciseId ? { ...ex, ...updates } : ex
+    ));
+  };
+
+  const deleteUserExercise = (exerciseId: string) => {
+    setUserExercises(userExercises.filter(ex => ex.id !== exerciseId));
+  };
+
+  const copyExerciseToUser = (userId: string, exerciseId: string) => {
+    const baseExercise = exercises.find(e => e.id === exerciseId);
+    if (!baseExercise) return;
+
+    const userExercise: Omit<UserExercise, 'id' | 'createdAt'> = {
+      userId,
+      baseExerciseId: exerciseId,
+      title: baseExercise.title,
+      muscleGroup: baseExercise.muscleGroup,
+      duration: baseExercise.duration,
+      difficulty: baseExercise.difficulty,
+      caloriesBurned: baseExercise.caloriesBurned,
+      image: baseExercise.image,
+      description: baseExercise.description,
+      steps: [...baseExercise.steps],
+      source: 'copy',
+    };
+
+    addUserExercise(userExercise);
+  };
+
+  // Admin Meal actions
+  const addMeal = (meal: Omit<Meal, 'id'>) => {
+    const newMeal = { ...meal, id: Date.now().toString() };
+    setMeals([...meals, newMeal]);
+  };
+
+  const updateMeal = (mealId: string, updates: Partial<Meal>) => {
+    setMeals(meals.map(meal =>
+      meal.id === mealId ? { ...meal, ...updates } : meal
+    ));
+  };
+
+  const deleteMeal = (mealId: string) => {
+    setMeals(meals.filter(meal => meal.id !== mealId));
+  };
+
+  // Admin Exercise actions
   const addExercise = (exercise: Omit<Exercise, 'id'>) => {
     const newExercise = { ...exercise, id: Date.now().toString() };
     setExercises([...exercises, newExercise]);
+  };
+
+  const updateExercise = (exerciseId: string, updates: Partial<Exercise>) => {
+    setExercises(exercises.map(ex =>
+      ex.id === exerciseId ? { ...ex, ...updates } : ex
+    ));
+  };
+
+  const deleteExercise = (exerciseId: string) => {
+    setExercises(exercises.filter(ex => ex.id !== exerciseId));
   };
 
   // Getters
@@ -310,6 +614,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const today = date || new Date().toISOString().split('T')[0];
     return dailyPlanners.filter(p => p.userId === userId && p.date === today);
   };
+
+  const getUserMeals = (userId: string) =>
+    userMeals.filter(m => m.userId === userId);
+
+  const getUserExercises = (userId: string) =>
+    userExercises.filter(e => e.userId === userId);
   
   const getPendingFeedbacksCount = () => 
     feedbacks.filter(f => f.status === 'Pending').length;
@@ -324,20 +634,34 @@ export function DataProvider({ children }: { children: ReactNode }) {
     activeUsers: users.filter(u => u.role === 'user' && u.isActive).length,
     totalFeedbacks: feedbacks.length,
     pendingFeedbacks: feedbacks.filter(f => f.status === 'Pending').length,
-    totalMealPlans: mealPlans.length,
-    totalExercises: exercises.length,
+    totalMeals: meals.length + userMeals.length,
+    totalExercises: exercises.length + userExercises.length,
   });
 
   return (
     <DataContext.Provider value={{
       users,
-      mealPlans,
+      meals,
+      userMeals,
       exercises,
+      userExercises,
+      mealPlans,
       sleepCycles,
       waterLogs,
       feedbacks,
       activityLogs,
       dailyPlanners,
+      // User Meal actions
+      addUserMeal,
+      updateUserMeal,
+      deleteUserMeal,
+      copyMealToUser,
+      // User Exercise actions
+      addUserExercise,
+      updateUserExercise,
+      deleteUserExercise,
+      copyExerciseToUser,
+      // Other user actions
       addMealPlan,
       addSleepCycle,
       updateWaterLog,
@@ -346,15 +670,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addDailyPlanner,
       updateDailyPlannerStatus,
       deleteDailyPlanner,
+      // Admin actions
       addUser,
       updateUser,
       deleteUser,
       updateUserStatus,
       updateFeedbackStatus,
+      addMeal,
+      updateMeal,
+      deleteMeal,
       addExercise,
+      updateExercise,
+      deleteExercise,
+      // Getters
       getUserById,
       getUserFeedbacks,
       getUserPlanners,
+      getUserMeals,
+      getUserExercises,
       getPendingFeedbacksCount,
       getRecentUsers,
       getStatistics,
