@@ -1,52 +1,103 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useAuth } from '../AuthContext';
-import { useData } from '../DataContext';
 import { MessageSquare, Send, CheckCircle } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+
+interface UserFeedback {
+  id: number;
+  message: string;
+  status: string;
+  createdAt: string;
+}
 
 export function Feedback() {
   const { userName } = useAuth();
-  const { addFeedback, addActivityLog } = useData();
   const [category, setCategory] = useState('');
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [myFeedback, setMyFeedback] = useState<UserFeedback[]>([]);
+  const [isLoadingFeedback, setIsLoadingFeedback] = useState(true);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    loadMyFeedback();
+  }, []);
+
+  const loadMyFeedback = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/feedback/my-feedback', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMyFeedback(data.feedback || []);
+      }
+    } catch (error) {
+      console.error('Failed to load feedback:', error);
+    } finally {
+      setIsLoadingFeedback(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!category || !message.trim()) {
       toast.error('Please fill in all fields');
       return;
     }
 
-    // Add feedback to backend
-    const feedbackId = addFeedback({
-      userId: '1', // Mock user ID
-      userName: userName || 'User',
-      category,
-      message,
-    });
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/feedback', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ message })
+      });
 
-    // Add activity log
-    addActivityLog({
-      userId: '1',
-      type: 'feedback',
-      title: 'Sent feedback to admin',
-      details: `Category: ${category}`,
-      timestamp: new Date().toISOString(),
-    });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit feedback');
+      }
 
-    toast.success('Feedback sent successfully! Admin will review it soon.');
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setCategory('');
-      setMessage('');
-    }, 3000);
+      toast.success('Feedback sent successfully! Admin will review it soon.');
+      setSubmitted(true);
+      
+      // Reload feedback list
+      await loadMyFeedback();
+      
+      setTimeout(() => {
+        setSubmitted(false);
+        setCategory('');
+        setMessage('');
+      }, 3000);
+    } catch (error: any) {
+      console.error('Feedback submission error:', error);
+      toast.error(error.message || 'Failed to submit feedback. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getStatusDisplay = (status: string) => {
+    const statusMap: Record<string, { label: string; color: string }> = {
+      'new': { label: 'Pending', color: 'text-yellow-600 bg-yellow-50' },
+      'in_progress': { label: 'Reviewed', color: 'text-blue-600 bg-blue-50' },
+      'done': { label: 'Resolved', color: 'text-green-600 bg-green-50' }
+    };
+    return statusMap[status] || { label: status, color: 'text-gray-600 bg-gray-50' };
   };
 
   return (
@@ -105,9 +156,13 @@ export function Feedback() {
                 />
               </div>
 
-              <Button type="submit" className="w-full gradient-primary text-white border-0">
+              <Button 
+                type="submit" 
+                className="w-full gradient-primary text-white border-0"
+                disabled={isSubmitting}
+              >
                 <Send className="w-4 h-4 mr-2" />
-                Send Feedback
+                {isSubmitting ? 'Sending...' : 'Send Feedback'}
               </Button>
             </form>
           )}
@@ -166,17 +221,28 @@ export function Feedback() {
           </Card>
 
           <Card className="p-6 rounded-xl border-0 shadow-md">
-            <h3 className="mb-4" style={{ fontWeight: 600 }}>Recent Feedback Status</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                <span className="text-green-900" style={{ fontSize: '0.875rem' }}>Feature: Dark mode</span>
-                <span className="text-green-600" style={{ fontSize: '0.75rem', fontWeight: 600 }}>In Progress</span>
+            <h3 className="mb-4" style={{ fontWeight: 600 }}>My Recent Feedback</h3>
+            {isLoadingFeedback ? (
+              <p className="text-gray-500 text-center py-4">Loading...</p>
+            ) : myFeedback.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No feedback submitted yet</p>
+            ) : (
+              <div className="space-y-3">
+                {myFeedback.slice(0, 3).map((feedback) => {
+                  const statusDisplay = getStatusDisplay(feedback.status);
+                  return (
+                    <div key={feedback.id} className={`flex items-center justify-between p-3 rounded-lg ${statusDisplay.color}`}>
+                      <span className={statusDisplay.color.split(' ')[0]} style={{ fontSize: '0.875rem' }}>
+                        {feedback.message.length > 50 ? feedback.message.substring(0, 50) + '...' : feedback.message}
+                      </span>
+                      <span className={statusDisplay.color} style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                        {statusDisplay.label}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                <span className="text-blue-900" style={{ fontSize: '0.875rem' }}>Bug: Login issue</span>
-                <span className="text-blue-600" style={{ fontSize: '0.75rem', fontWeight: 600 }}>Resolved</span>
-              </div>
-            </div>
+            )}
           </Card>
         </div>
       </div>

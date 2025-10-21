@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -8,18 +8,34 @@ import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
-import { useData, Meal, UserMeal } from '../DataContext';
 import { UtensilsCrossed, Clock, Flame, Plus, Edit2, Trash2, Eye } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+
+interface Meal {
+  id: string;
+  name: string;
+  calories: number;
+  type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  protein: number;
+  carbs: number;
+  fat: number;
+  prepTime: number;
+  image: string;
+  ingredients: string[];
+  steps: string[];
+  source: 'admin' | 'copy' | 'custom';
+  createdAt?: string;
+}
 
 export function MealSuggestionsNew() {
-  const { meals, userMeals, addUserMeal, updateUserMeal, deleteUserMeal, copyMealToUser, addActivityLog } = useData();
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [showRecipeDialog, setShowRecipeDialog] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [selectedMeal, setSelectedMeal] = useState<Meal | UserMeal | null>(null);
-  const [editingMeal, setEditingMeal] = useState<UserMeal | null>(null);
+  const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
+  const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     calories: '',
@@ -32,92 +48,205 @@ export function MealSuggestionsNew() {
     steps: '',
   });
 
-  const userId = '1'; // Mock user ID
-  const publicMeals = meals.filter(m => m.status === 'public');
-  const myMeals = userMeals.filter(m => m.userId === userId);
+  // Fetch meals from API
+  useEffect(() => {
+    loadMeals();
+  }, []);
 
-  const handleViewRecipe = (meal: Meal | UserMeal) => {
+  const loadMeals = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/meals/user', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load meals');
+      }
+
+      const data = await response.json();
+      setMeals(data.meals || []);
+    } catch (error) {
+      console.error('Load meals error:', error);
+      toast.error('Failed to load meals');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const publicMeals = meals.filter(m => m.source === 'admin');
+  const myMeals = meals.filter(m => m.source === 'copy' || m.source === 'custom');
+
+  const handleViewRecipe = (meal: Meal) => {
     setSelectedMeal(meal);
     setShowRecipeDialog(true);
   };
 
-  const handleAddToMyMeals = (meal: Meal) => {
-    copyMealToUser(userId, meal.id);
-    toast.success(`Added "${meal.name}" to My Meals!`);
-    addActivityLog({
-      userId,
-      type: 'meal',
-      title: 'Added meal',
-      details: `Added ${meal.name} to My Meals`,
-      timestamp: new Date().toISOString(),
-    });
+  const handleAddToMyMeals = async (meal: Meal) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/meals/copy/${meal.id}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add meal');
+      }
+
+      toast.success(`Added "${meal.name}" to My Meals!`);
+      await loadMeals(); // Reload meals
+    } catch (error) {
+      console.error('Add meal error:', error);
+      toast.error('Failed to add meal');
+    }
   };
 
-  const handleAddCustomMeal = () => {
+  const handleAddCustomMeal = async () => {
     if (!formData.name || !formData.calories) {
       toast.error('Please fill in name and calories!');
       return;
     }
 
-    const newMeal: Omit<UserMeal, 'id' | 'createdAt'> = {
-      userId,
-      name: formData.name,
-      calories: parseInt(formData.calories),
-      type: formData.type,
-      protein: parseInt(formData.protein) || 0,
-      carbs: parseInt(formData.carbs) || 0,
-      fat: parseInt(formData.fat) || 0,
-      image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
-      ingredients: formData.ingredients.split(',').map(i => i.trim()),
-      steps: formData.steps.split('\n').filter(s => s.trim()),
-      prepTime: parseInt(formData.prepTime) || 15,
-      source: 'custom',
-    };
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/meals', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          calories: parseInt(formData.calories),
+          type: formData.type,
+          protein: parseInt(formData.protein) || 0,
+          carbs: parseInt(formData.carbs) || 0,
+          fat: parseInt(formData.fat) || 0,
+          prepTime: parseInt(formData.prepTime) || 15,
+          ingredientsJson: JSON.stringify(formData.ingredients.split(',').map(i => i.trim())),
+          stepsJson: JSON.stringify(formData.steps.split('\n').filter(s => s.trim())),
+          image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800'
+        })
+      });
 
-    addUserMeal(newMeal);
-    toast.success('Meal created successfully!');
-    setShowAddDialog(false);
-    setFormData({
-      name: '',
-      calories: '',
-      type: 'lunch',
-      protein: '',
-      carbs: '',
-      fat: '',
-      prepTime: '',
-      ingredients: '',
-      steps: '',
-    });
-  };
+      if (!response.ok) {
+        throw new Error('Failed to create meal');
+      }
 
-  const handleEditMeal = () => {
-    if (!editingMeal) return;
-
-    updateUserMeal(editingMeal.id, {
-      name: formData.name,
-      calories: parseInt(formData.calories),
-      type: formData.type,
-      protein: parseInt(formData.protein) || 0,
-      carbs: parseInt(formData.carbs) || 0,
-      fat: parseInt(formData.fat) || 0,
-      ingredients: formData.ingredients.split(',').map(i => i.trim()),
-      steps: formData.steps.split('\n').filter(s => s.trim()),
-      prepTime: parseInt(formData.prepTime) || 15,
-    });
-
-    toast.success('Meal updated!');
-    setShowEditDialog(false);
-    setEditingMeal(null);
-  };
-
-  const handleDeleteMeal = (mealId: string, mealName: string) => {
-    if (window.confirm(`Delete "${mealName}"?`)) {
-      deleteUserMeal(mealId);
-      toast.success('Meal deleted');
+      toast.success('Meal created successfully!');
+      setShowAddDialog(false);
+      setFormData({
+        name: '',
+        calories: '',
+        type: 'lunch',
+        protein: '',
+        carbs: '',
+        fat: '',
+        prepTime: '',
+        ingredients: '',
+        steps: '',
+      });
+      await loadMeals();
+    } catch (error) {
+      console.error('Create meal error:', error);
+      toast.error('Failed to create meal');
     }
   };
 
-  const openEditDialog = (meal: UserMeal) => {
+  const handleEditMeal = async () => {
+    if (!editingMeal) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/meals/${editingMeal.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          calories: parseInt(formData.calories),
+          type: formData.type,
+          protein: parseInt(formData.protein) || 0,
+          carbs: parseInt(formData.carbs) || 0,
+          fat: parseInt(formData.fat) || 0,
+          prepTime: parseInt(formData.prepTime) || 15,
+          ingredientsJson: JSON.stringify(formData.ingredients.split(',').map(i => i.trim())),
+          stepsJson: JSON.stringify(formData.steps.split('\n').filter(s => s.trim()))
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update meal');
+      }
+
+      toast.success('Meal updated!');
+      setShowEditDialog(false);
+      setEditingMeal(null);
+      await loadMeals();
+    } catch (error) {
+      console.error('Update meal error:', error);
+      toast.error('Failed to update meal');
+    }
+  };
+
+  const handleDeleteMeal = async (mealId: string, mealName: string) => {
+    if (!window.confirm(`Delete "${mealName}"?`)) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/meals/${mealId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete meal');
+      }
+
+      toast.success('Meal deleted');
+      await loadMeals();
+    } catch (error) {
+      console.error('Delete meal error:', error);
+      toast.error('Failed to delete meal');
+    }
+  };
+
+  const handleLogMeal = async (meal: Meal) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/activity/log-meal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          mealId: meal.id,
+          name: meal.name,
+          calories: meal.calories,
+          type: meal.type
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to log meal');
+      
+      toast.success(`✅ ${meal.name} logged! (${meal.calories} kcal)`);
+    } catch (error) {
+      console.error('Log meal error:', error);
+      toast.error('Failed to log meal. Please try again.');
+    }
+  };
+
+  const openEditDialog = (meal: Meal) => {
     setEditingMeal(meal);
     setFormData({
       name: meal.name,
@@ -133,7 +262,18 @@ export function MealSuggestionsNew() {
     setShowEditDialog(true);
   };
 
-  const MealCard = ({ meal, showActions = false }: { meal: Meal | UserMeal; showActions?: boolean }) => (
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00C78C] mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading meals...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const MealCard = ({ meal, showActions = false }: { meal: Meal; showActions?: boolean }) => (
     <Card className="overflow-hidden rounded-xl border-0 shadow-md hover:shadow-xl transition-all">
       <div className="relative h-48">
         <ImageWithFallback
@@ -197,14 +337,14 @@ export function MealSuggestionsNew() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => openEditDialog(meal as UserMeal)}
+                onClick={() => openEditDialog(meal)}
               >
                 <Edit2 className="w-4 h-4" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => handleDeleteMeal((meal as UserMeal).id, meal.name)}
+                onClick={() => handleDeleteMeal(meal.id, meal.name)}
                 className="text-red-600 hover:text-red-700"
               >
                 <Trash2 className="w-4 h-4" />
@@ -212,6 +352,15 @@ export function MealSuggestionsNew() {
             </>
           )}
         </div>
+        
+        {/* Log Meal Button */}
+        <Button
+          className="w-full mt-2 gradient-primary text-white border-0"
+          onClick={() => handleLogMeal(meal)}
+        >
+          <UtensilsCrossed className="w-4 h-4 mr-2" />
+          Log This Meal
+        </Button>
       </div>
     </Card>
   );
@@ -356,7 +505,7 @@ export function MealSuggestionsNew() {
       </Dialog>
 
       {/* Add/Edit Dialogs */}
-      <Dialog open={showAddDialog || showEditDialog} onOpenChange={(open) => {
+      <Dialog open={showAddDialog || showEditDialog} onOpenChange={(open: boolean) => {
         if (!open) {
           setShowAddDialog(false);
           setShowEditDialog(false);

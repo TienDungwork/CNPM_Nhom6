@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -8,12 +8,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { useData, Meal } from '../DataContext';
+import { adminAPI } from '../../services/adminAPI';
+import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { Plus, Edit2, Trash2, Eye, EyeOff, Search } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+
+interface Meal {
+  id: string;
+  name: string;
+  calories: number;
+  type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  protein: number;
+  carbs: number;
+  fat: number;
+  image: string;
+  ingredientsJson: string;
+  stepsJson: string;
+  prepTime: number;
+  source: string;
+  status: 'public' | 'private';
+  creatorId?: string;
+}
 
 export function MealManagement() {
-  const { meals, userMeals, addMeal, updateMeal, deleteMeal, getUserById } = useData();
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
@@ -34,73 +53,127 @@ export function MealManagement() {
     image: '',
   });
 
-  const filteredMeals = meals.filter(meal => {
+  // Load meals from backend
+  const loadMeals = async () => {
+    try {
+      setLoading(true);
+      const response = await adminAPI.getAllMeals();
+      const mealsData = response.meals || [];
+      // Parse JSON strings for ingredients and steps
+      const parsedMeals = mealsData.map((meal: any) => {
+        let ingredients = [];
+        let steps = [];
+        try {
+          ingredients = meal.ingredientsJson ? JSON.parse(meal.ingredientsJson) : [];
+          steps = meal.stepsJson ? JSON.parse(meal.stepsJson) : [];
+        } catch (e) {
+          console.warn('Failed to parse meal JSON:', meal.id, e);
+        }
+        return {
+          ...meal,
+          ingredients,
+          steps,
+        };
+      });
+      setMeals(parsedMeals);
+    } catch (error) {
+      console.error('Failed to load meals:', error);
+      toast.error('Không thể tải danh sách món ăn');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMeals();
+  }, []);
+
+  const filteredMeals = meals.filter((meal: Meal) => {
+    if (!meal || !meal.name) return false; // Safety check
     const matchesSearch = meal.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === 'all' || meal.type === filterType;
     const matchesStatus = filterStatus === 'all' || meal.status === filterStatus;
     return matchesSearch && matchesType && matchesStatus;
   });
 
-  const handleAddMeal = () => {
+  const handleAddMeal = async () => {
     if (!formData.name || !formData.calories) {
       toast.error('Please fill in name and calories!');
       return;
     }
 
-    const newMeal: Omit<Meal, 'id'> = {
-      name: formData.name,
-      calories: parseInt(formData.calories),
-      type: formData.type,
-      protein: parseInt(formData.protein) || 0,
-      carbs: parseInt(formData.carbs) || 0,
-      fat: parseInt(formData.fat) || 0,
-      image: formData.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
-      ingredients: formData.ingredients.split(',').map(i => i.trim()).filter(i => i),
-      steps: formData.steps.split('\n').filter(s => s.trim()),
-      prepTime: parseInt(formData.prepTime) || 15,
-      source: 'admin',
-      status: 'public',
-    };
-
-    addMeal(newMeal);
-    toast.success('Meal added successfully!');
-    setShowAddDialog(false);
-    resetForm();
-  };
-
-  const handleEditMeal = () => {
-    if (!editingMeal) return;
-
-    updateMeal(editingMeal.id, {
-      name: formData.name,
-      calories: parseInt(formData.calories),
-      type: formData.type,
-      protein: parseInt(formData.protein) || 0,
-      carbs: parseInt(formData.carbs) || 0,
-      fat: parseInt(formData.fat) || 0,
-      image: formData.image || editingMeal.image,
-      ingredients: formData.ingredients.split(',').map(i => i.trim()).filter(i => i),
-      steps: formData.steps.split('\n').filter(s => s.trim()),
-      prepTime: parseInt(formData.prepTime) || 15,
-    });
-
-    toast.success('Meal updated!');
-    setShowEditDialog(false);
-    setEditingMeal(null);
-  };
-
-  const handleDeleteMeal = (mealId: string, mealName: string) => {
-    if (window.confirm(`Delete meal "${mealName}"? This will not affect user copies.`)) {
-      deleteMeal(mealId);
-      toast.success('Meal deleted');
+    try {
+      await adminAPI.createMeal({
+        name: formData.name,
+        type: formData.type,
+        calories: parseInt(formData.calories),
+        protein: parseInt(formData.protein) || 0,
+        carbs: parseInt(formData.carbs) || 0,
+        fat: parseInt(formData.fat) || 0,
+        prepTime: parseInt(formData.prepTime) || 15,
+        image: formData.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
+        ingredients: formData.ingredients.split(',').map(i => i.trim()).filter(i => i),
+        steps: formData.steps.split('\n').filter(s => s.trim()),
+      });
+      await loadMeals();
+      toast.success('Meal added successfully!');
+      setShowAddDialog(false);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to create meal:', error);
+      toast.error('Không thể tạo món ăn mới');
     }
   };
 
-  const handleToggleStatus = (meal: Meal) => {
-    updateMeal(meal.id, {
-      status: meal.status === 'public' ? 'hidden' : 'public'
-    });
-    toast.success(`Meal ${meal.status === 'public' ? 'hidden' : 'published'}`);
+  const handleEditMeal = async () => {
+    if (!editingMeal) return;
+
+    try {
+      await adminAPI.updateMeal(editingMeal.id, {
+        name: formData.name,
+        calories: parseInt(formData.calories),
+        type: formData.type,
+        protein: parseInt(formData.protein) || 0,
+        carbs: parseInt(formData.carbs) || 0,
+        fat: parseInt(formData.fat) || 0,
+        prepTime: parseInt(formData.prepTime) || 15,
+        image: formData.image || editingMeal.image,
+        ingredients: formData.ingredients.split(',').map(i => i.trim()).filter(i => i),
+        steps: formData.steps.split('\n').filter(s => s.trim()),
+      });
+      await loadMeals();
+      toast.success('Meal updated!');
+      setShowEditDialog(false);
+      setEditingMeal(null);
+    } catch (error) {
+      console.error('Failed to update meal:', error);
+      toast.error('Không thể cập nhật món ăn');
+    }
+  };
+
+  const handleDeleteMeal = async (mealId: string, mealName: string) => {
+    if (window.confirm(`Delete meal "${mealName}"? This will remove it from the database.`)) {
+      try {
+        await adminAPI.deleteMeal(mealId);
+        await loadMeals();
+        toast.success('Meal deleted');
+      } catch (error) {
+        console.error('Failed to delete meal:', error);
+        toast.error('Không thể xóa món ăn');
+      }
+    }
+  };
+
+  const handleToggleStatus = async (meal: Meal) => {
+    try {
+      const newStatus = meal.status === 'public' ? ('hidden' as 'hidden') : ('public' as 'public');
+      await adminAPI.updateMeal(meal.id, { status: newStatus });
+      await loadMeals();
+      toast.success(`Meal ${newStatus === 'public' ? 'published' : 'hidden'}`);
+    } catch (error) {
+      console.error('Failed to toggle status:', error);
+      toast.error('Không thể thay đổi trạng thái');
+    }
   };
 
   const openEditDialog = (meal: Meal) => {
@@ -113,8 +186,8 @@ export function MealManagement() {
       carbs: meal.carbs.toString(),
       fat: meal.fat.toString(),
       prepTime: meal.prepTime.toString(),
-      ingredients: meal.ingredients.join(', '),
-      steps: meal.steps.join('\n'),
+      ingredients: (meal as any).ingredients?.join(', ') || '',
+      steps: (meal as any).steps?.join('\n') || '',
       image: meal.image,
     });
     setShowEditDialog(true);
@@ -135,19 +208,12 @@ export function MealManagement() {
     });
   };
 
-  const userMealStats = userMeals.reduce((acc, um) => {
-    if (um.baseMealId) {
-      acc[um.baseMealId] = (acc[um.baseMealId] || 0) + 1;
-    }
-    return acc;
-  }, {} as Record<string, number>);
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="mb-2" style={{ fontSize: '2rem', fontWeight: 600 }}>Meal Management</h1>
-          <p className="text-gray-600">Manage meal database and user submissions</p>
+          <p className="text-gray-600">Manage meal database</p>
         </div>
         <Button onClick={() => { resetForm(); setShowAddDialog(true); }} className="gradient-primary text-white border-0">
           <Plus className="w-4 h-4 mr-2" />
@@ -186,7 +252,7 @@ export function MealManagement() {
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="public">Public</SelectItem>
-              <SelectItem value="hidden">Hidden</SelectItem>
+              <SelectItem value="private">Private</SelectItem>
             </SelectContent>
           </Select>
           <div className="flex items-center gap-2 text-gray-600">
@@ -196,7 +262,7 @@ export function MealManagement() {
       </Card>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-4 rounded-xl border-0 shadow-md">
           <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Total Meals</p>
           <p style={{ fontSize: '2rem', fontWeight: 700, color: '#00C78C' }}>{meals.length}</p>
@@ -204,23 +270,25 @@ export function MealManagement() {
         <Card className="p-4 rounded-xl border-0 shadow-md">
           <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Public</p>
           <p style={{ fontSize: '2rem', fontWeight: 700, color: '#00C78C' }}>
-            {meals.filter(m => m.status === 'public').length}
+            {meals.filter((m: Meal) => m.status === 'public').length}
           </p>
         </Card>
         <Card className="p-4 rounded-xl border-0 shadow-md">
-          <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Hidden</p>
+          <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Private</p>
           <p style={{ fontSize: '2rem', fontWeight: 700, color: '#FF9800' }}>
-            {meals.filter(m => m.status === 'hidden').length}
+            {meals.filter((m: Meal) => m.status === 'private').length}
           </p>
-        </Card>
-        <Card className="p-4 rounded-xl border-0 shadow-md">
-          <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>User Copies</p>
-          <p style={{ fontSize: '2rem', fontWeight: 700, color: '#2196F3' }}>{userMeals.length}</p>
         </Card>
       </div>
 
       {/* Meals Table */}
       <Card className="rounded-xl border-0 shadow-md overflow-hidden">
+        {loading ? (
+          <div className="text-center py-12 text-gray-400">
+            <Search className="w-16 h-16 mx-auto mb-4 opacity-20 animate-pulse" />
+            <p>Loading meals...</p>
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -231,14 +299,13 @@ export function MealManagement() {
                 <TableHead>Type</TableHead>
                 <TableHead>Nutrition</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>User Copies</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredMeals.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                     No meals found
                   </TableCell>
                 </TableRow>
@@ -248,7 +315,7 @@ export function MealManagement() {
                     <TableCell style={{ fontSize: '0.875rem' }}>#{meal.id.slice(0, 6)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <img
+                        <ImageWithFallback
                           src={meal.image}
                           alt={meal.name}
                           className="w-10 h-10 rounded-lg object-cover"
@@ -267,9 +334,6 @@ export function MealManagement() {
                       <Badge className={meal.status === 'public' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                         {meal.status}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{userMealStats[meal.id] || 0} users</Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -308,10 +372,11 @@ export function MealManagement() {
             </TableBody>
           </Table>
         </div>
+        )}
       </Card>
 
       {/* Add/Edit Dialog */}
-      <Dialog open={showAddDialog || showEditDialog} onOpenChange={(open) => {
+      <Dialog open={showAddDialog || showEditDialog} onOpenChange={(open: boolean) => {
         if (!open) {
           setShowAddDialog(false);
           setShowEditDialog(false);

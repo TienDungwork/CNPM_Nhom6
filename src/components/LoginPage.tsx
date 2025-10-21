@@ -1,19 +1,17 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
-import { useData } from './DataContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Checkbox } from './ui/checkbox';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Leaf } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const { users } = useData();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -34,11 +32,6 @@ export function LoginPage() {
       return;
     }
     
-    if (!validateEmail(email)) {
-      setErrors(prev => ({ ...prev, email: 'Email không hợp lệ. Vui lòng nhập lại địa chỉ email.' }));
-      return;
-    }
-    
     if (!password) {
       setErrors(prev => ({ ...prev, password: 'Vui lòng nhập mật khẩu.' }));
       return;
@@ -46,31 +39,28 @@ export function LoginPage() {
 
     setIsLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    // Check if user exists
-    const user = users.find(u => u.email === email);
-    
-    if (!user) {
-      setErrors(prev => ({ ...prev, general: 'Tài khoản hoặc mật khẩu không chính xác.' }));
+    try {
+      // Use real API
+      await login(email, password);
+      
+      // Navigate based on role
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        if (user.role === 'admin') {
+          toast.success('Welcome back, Admin!');
+          navigate('/admin/dashboard');
+        } else {
+          toast.success('Successfully logged in!');
+          navigate('/user/dashboard');
+        }
+      }
+    } catch (error: any) {
+      setErrors(prev => ({ ...prev, general: error.message || 'Đăng nhập thất bại.' }));
       toast.error('Login failed!');
+    } finally {
       setIsLoading(false);
-      return;
     }
-    
-    // Mock authentication
-    if (user.role === 'admin') {
-      login('admin', user.name);
-      toast.success('Welcome back, Admin!');
-      navigate('/admin/dashboard');
-    } else {
-      login('user', user.name);
-      toast.success('Successfully logged in!');
-      navigate('/user/dashboard');
-    }
-    
-    setIsLoading(false);
   };
 
   const handleSocialLogin = (provider: string) => {

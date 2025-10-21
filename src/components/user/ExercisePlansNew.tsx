@@ -8,23 +8,45 @@ import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
-import { useData, Exercise, UserExercise } from '../DataContext';
-import { Dumbbell, Clock, Flame, Plus, Edit2, Trash2, Play, Pause, Check, Activity } from 'lucide-react';
+import { Dumbbell, Clock, Flame, Plus, Edit2, Trash2, Play, TrendingUp } from 'lucide-react';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+
+interface Exercise {
+  id: string;
+  title: string;
+  muscleGroup: string;
+  duration: number;
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  caloriesBurned: number;
+  image: string;
+  description: string;
+  steps: string[];
+  source: 'admin' | 'copy' | 'custom';
+  createdAt?: string;
+}
+
+const getLevelColor = (level: string) => {
+  switch (level) {
+    case 'Beginner':
+      return 'bg-green-100 text-green-700';
+    case 'Intermediate':
+      return 'bg-blue-100 text-blue-700';
+    case 'Advanced':
+      return 'bg-purple-100 text-purple-700';
+    default:
+      return 'bg-gray-100 text-gray-700';
+  }
+};
 
 export function ExercisePlansNew() {
-  const { exercises, userExercises, addUserExercise, updateUserExercise, deleteUserExercise, copyExerciseToUser, addActivityLog } = useData();
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showWorkoutDialog, setShowWorkoutDialog] = useState(false);
-  const [selectedExercise, setSelectedExercise] = useState<Exercise | UserExercise | null>(null);
-  const [editingExercise, setEditingExercise] = useState<UserExercise | null>(null);
-  const [workoutTimer, setWorkoutTimer] = useState(0);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
-  
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     muscleGroup: '',
@@ -35,120 +57,200 @@ export function ExercisePlansNew() {
     steps: '',
   });
 
-  const userId = '1'; // Mock user ID
-  const publicExercises = exercises.filter(e => e.status === 'public');
-  const myExercises = userExercises.filter(e => e.userId === userId);
-
-  // Workout Timer Effect
+  // Fetch exercises from API
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isTimerRunning && selectedExercise) {
-      interval = setInterval(() => {
-        setWorkoutTimer(prev => {
-          const maxTime = selectedExercise.duration * 60;
-          if (prev >= maxTime) {
-            setIsTimerRunning(false);
-            handleFinishWorkout();
-            return maxTime;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isTimerRunning, selectedExercise]);
+    loadExercises();
+  }, []);
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const loadExercises = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/exercises/user', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load exercises');
+      }
+
+      const data = await response.json();
+      setExercises(data.exercises || []);
+    } catch (error) {
+      console.error('Load exercises error:', error);
+      toast.error('Failed to load exercises');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleViewDetails = (exercise: Exercise | UserExercise) => {
+  const publicExercises = exercises.filter(e => e.source === 'admin');
+  const myExercises = exercises.filter(e => e.source === 'copy' || e.source === 'custom');
+
+  const handleViewDetails = (exercise: Exercise) => {
     setSelectedExercise(exercise);
     setShowDetailsDialog(true);
   };
 
-  const handleStartWorkout = (exercise: Exercise | UserExercise) => {
-    setSelectedExercise(exercise);
-    setWorkoutTimer(0);
-    setCurrentStep(0);
-    setIsTimerRunning(false);
-    setShowWorkoutDialog(true);
+  const handleAddToMyExercises = async (exercise: Exercise) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/exercises/copy/${exercise.id}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add exercise');
+      }
+
+      toast.success(`Added "${exercise.title}" to My Exercises!`);
+      await loadExercises();
+    } catch (error) {
+      console.error('Add exercise error:', error);
+      toast.error('Failed to add exercise');
+    }
   };
 
-  const handleFinishWorkout = () => {
-    if (!selectedExercise) return;
-
-    addActivityLog({
-      userId,
-      type: 'exercise',
-      title: 'Completed Workout',
-      details: `Completed ${selectedExercise.title} - ${selectedExercise.duration} min`,
-      timestamp: new Date().toISOString(),
-    });
-
-    toast.success(`Workout completed! 🎉 You burned ~${selectedExercise.caloriesBurned} calories!`);
-    setShowWorkoutDialog(false);
-    setIsTimerRunning(false);
-  };
-
-  const handleAddToMyExercises = (exercise: Exercise) => {
-    copyExerciseToUser(userId, exercise.id);
-    toast.success(`Added "${exercise.title}" to My Exercises!`);
-  };
-
-  const handleAddCustomExercise = () => {
+  const handleAddCustomExercise = async () => {
     if (!formData.title || !formData.duration) {
       toast.error('Please fill in title and duration!');
       return;
     }
 
-    const newExercise: Omit<UserExercise, 'id' | 'createdAt'> = {
-      userId,
-      title: formData.title,
-      muscleGroup: formData.muscleGroup || 'General',
-      duration: parseInt(formData.duration),
-      difficulty: formData.difficulty,
-      caloriesBurned: parseInt(formData.caloriesBurned) || 100,
-      image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400',
-      description: formData.description,
-      steps: formData.steps.split('\n').filter(s => s.trim()),
-      source: 'custom',
-    };
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/exercises', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: formData.title,
+          muscleGroup: formData.muscleGroup,
+          duration: parseInt(formData.duration),
+          difficulty: formData.difficulty,
+          caloriesBurned: parseInt(formData.caloriesBurned) || 100,
+          description: formData.description,
+          stepsJson: JSON.stringify(formData.steps.split('\n').filter(s => s.trim())),
+          image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800'
+        })
+      });
 
-    addUserExercise(newExercise);
-    toast.success('Exercise created successfully!');
-    setShowAddDialog(false);
-    resetForm();
-  };
+      if (!response.ok) {
+        throw new Error('Failed to create exercise');
+      }
 
-  const handleEditExercise = () => {
-    if (!editingExercise) return;
-
-    updateUserExercise(editingExercise.id, {
-      title: formData.title,
-      muscleGroup: formData.muscleGroup,
-      duration: parseInt(formData.duration),
-      difficulty: formData.difficulty,
-      caloriesBurned: parseInt(formData.caloriesBurned) || 100,
-      description: formData.description,
-      steps: formData.steps.split('\n').filter(s => s.trim()),
-    });
-
-    toast.success('Exercise updated!');
-    setShowEditDialog(false);
-    setEditingExercise(null);
-  };
-
-  const handleDeleteExercise = (exerciseId: string, exerciseTitle: string) => {
-    if (window.confirm(`Delete "${exerciseTitle}"?`)) {
-      deleteUserExercise(exerciseId);
-      toast.success('Exercise deleted');
+      toast.success('Exercise created successfully!');
+      setShowAddDialog(false);
+      setFormData({
+        title: '',
+        muscleGroup: '',
+        duration: '',
+        difficulty: 'Beginner',
+        caloriesBurned: '',
+        description: '',
+        steps: '',
+      });
+      await loadExercises();
+    } catch (error) {
+      console.error('Create exercise error:', error);
+      toast.error('Failed to create exercise');
     }
   };
 
-  const openEditDialog = (exercise: UserExercise) => {
+  const handleEditExercise = async () => {
+    if (!editingExercise) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/exercises/${editingExercise.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: formData.title,
+          muscleGroup: formData.muscleGroup,
+          duration: parseInt(formData.duration),
+          difficulty: formData.difficulty,
+          caloriesBurned: parseInt(formData.caloriesBurned) || 100,
+          description: formData.description,
+          stepsJson: JSON.stringify(formData.steps.split('\n').filter(s => s.trim()))
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update exercise');
+      }
+
+      toast.success('Exercise updated!');
+      setShowEditDialog(false);
+      setEditingExercise(null);
+      await loadExercises();
+    } catch (error) {
+      console.error('Update exercise error:', error);
+      toast.error('Failed to update exercise');
+    }
+  };
+
+  const handleDeleteExercise = async (exerciseId: string, exerciseTitle: string) => {
+    if (!window.confirm(`Delete "${exerciseTitle}"?`)) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/exercises/${exerciseId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete exercise');
+      }
+
+      toast.success('Exercise deleted');
+      await loadExercises();
+    } catch (error) {
+      console.error('Delete exercise error:', error);
+      toast.error('Failed to delete exercise');
+    }
+  };
+
+  const handleStartWorkout = async (exercise: Exercise) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/activity/log-exercise', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          exerciseId: exercise.id,
+          title: exercise.title,
+          duration: exercise.duration,
+          caloriesBurned: exercise.caloriesBurned
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to log exercise');
+      
+      toast.success(`✅ Completed ${exercise.title}! Great work! 💪`);
+      setShowDetailsDialog(false);
+    } catch (error) {
+      console.error('Log exercise error:', error);
+      toast.error('Failed to log exercise. Please try again.');
+    }
+  };
+
+  const openEditDialog = (exercise: Exercise) => {
     setEditingExercise(exercise);
     setFormData({
       title: exercise.title,
@@ -162,19 +264,18 @@ export function ExercisePlansNew() {
     setShowEditDialog(true);
   };
 
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      muscleGroup: '',
-      duration: '',
-      difficulty: 'Beginner',
-      caloriesBurned: '',
-      description: '',
-      steps: '',
-    });
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00C78C] mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading exercises...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const ExerciseCard = ({ exercise, showActions = false }: { exercise: Exercise | UserExercise; showActions?: boolean }) => (
+  const ExerciseCard = ({ exercise, showActions = false }: { exercise: Exercise; showActions?: boolean }) => (
     <Card className="overflow-hidden rounded-xl border-0 shadow-md hover:shadow-xl transition-all">
       <div className="relative h-48">
         <ImageWithFallback
@@ -182,83 +283,75 @@ export function ExercisePlansNew() {
           alt={exercise.title}
           className="w-full h-full object-cover"
         />
-        <Badge className="absolute top-4 right-4 bg-white text-gray-900 hover:bg-white">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+        <Badge className={`absolute top-4 right-4 ${getLevelColor(exercise.difficulty)}`}>
           {exercise.difficulty}
         </Badge>
       </div>
       
       <div className="p-6">
         <h3 className="mb-2" style={{ fontWeight: 600, fontSize: '1.25rem' }}>{exercise.title}</h3>
-        <p className="text-gray-600 mb-4" style={{ fontSize: '0.875rem' }}>{exercise.muscleGroup}</p>
+        <p className="text-gray-600 mb-4" style={{ fontSize: '0.875rem' }}>{exercise.description}</p>
         
-        <div className="flex items-center gap-4 mb-4 text-gray-600">
-          <div className="flex items-center gap-1">
-            <Clock className="w-4 h-4 text-blue-500" />
-            <span style={{ fontSize: '0.875rem' }}>{exercise.duration} min</span>
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="text-center p-3 bg-blue-50 rounded-lg">
+            <Clock className="w-5 h-5 text-blue-500 mx-auto mb-1" />
+            <p className="text-blue-900" style={{ fontWeight: 600, fontSize: '0.875rem' }}>{exercise.duration} min</p>
           </div>
-          <div className="flex items-center gap-1">
-            <Flame className="w-4 h-4 text-orange-500" />
-            <span style={{ fontSize: '0.875rem' }}>{exercise.caloriesBurned} cal</span>
+          <div className="text-center p-3 bg-orange-50 rounded-lg">
+            <Flame className="w-5 h-5 text-orange-500 mx-auto mb-1" />
+            <p className="text-orange-900" style={{ fontWeight: 600, fontSize: '0.875rem' }}>{exercise.caloriesBurned} cal</p>
+          </div>
+          <div className="text-center p-3 bg-green-50 rounded-lg">
+            <Dumbbell className="w-5 h-5 text-green-500 mx-auto mb-1" />
+            <p className="text-green-900" style={{ fontWeight: 600, fontSize: '0.875rem' }}>{exercise.muscleGroup}</p>
           </div>
         </div>
 
         <div className="flex gap-2">
-          {!showActions ? (
-            <>
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => handleViewDetails(exercise)}
-              >
-                <Activity className="w-4 h-4 mr-2" />
-                View Details
-              </Button>
-              <Button
-                className="flex-1 gradient-primary text-white border-0"
-                onClick={() => handleStartWorkout(exercise)}
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Start Workout
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => handleStartWorkout(exercise)}
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Start
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => openEditDialog(exercise as UserExercise)}
-              >
-                <Edit2 className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleDeleteExercise((exercise as UserExercise).id, exercise.title)}
-                className="text-red-600 hover:text-red-700"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </>
-          )}
+          <Button
+            className="flex-1 gradient-primary text-white border-0"
+            onClick={() => handleStartWorkout(exercise)}
+          >
+            <Play className="w-4 h-4 mr-2" />
+            Start Workout
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => handleViewDetails(exercise)}
+          >
+            Details
+          </Button>
         </div>
 
-        {!showActions && (
+        {!showActions ? (
           <Button
             variant="outline"
             className="w-full mt-2"
-            onClick={() => handleAddToMyExercises(exercise as Exercise)}
+            onClick={() => handleAddToMyExercises(exercise)}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add to My Exercises
           </Button>
+        ) : (
+          <div className="flex gap-2 mt-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => openEditDialog(exercise)}
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1 text-red-600 hover:text-red-700"
+              onClick={() => handleDeleteExercise(exercise.id, exercise.title)}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+          </div>
         )}
       </div>
     </Card>
@@ -269,110 +362,141 @@ export function ExercisePlansNew() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="mb-2" style={{ fontSize: '2rem', fontWeight: 600 }}>Exercise Plans</h1>
-          <p className="text-gray-600">Discover and track your workout routines</p>
+          <p className="text-gray-600">Personalized workout routines to reach your fitness goals</p>
         </div>
+        <Button
+          className="gradient-primary text-white border-0"
+          onClick={() => setShowAddDialog(true)}
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Add Custom Exercise
+        </Button>
       </div>
 
-      <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="all">All Exercises</TabsTrigger>
-          <TabsTrigger value="my">My Exercises</TabsTrigger>
+      <Tabs defaultValue="public" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="public">Public Exercises ({publicExercises.length})</TabsTrigger>
+          <TabsTrigger value="my">My Exercises ({myExercises.length})</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="mt-6">
+        <TabsContent value="public" className="space-y-4">
           {publicExercises.length === 0 ? (
             <Card className="p-12 rounded-xl border-0 shadow-md text-center">
               <Dumbbell className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <h3 className="mb-2" style={{ fontWeight: 600 }}>No exercises available</h3>
-              <p className="text-gray-600">Admin is adding exercise plans</p>
+              <h3 className="mb-2" style={{ fontWeight: 600 }}>No Public Exercises</h3>
+              <p className="text-gray-600">Admin hasn't added any exercises yet</p>
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {publicExercises.map((exercise) => (
-                <ExerciseCard key={exercise.id} exercise={exercise} />
+                <ExerciseCard key={exercise.id} exercise={exercise} showActions={false} />
               ))}
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="my" className="mt-6">
-          <div className="mb-6">
-            <Button
-              onClick={() => {
-                resetForm();
-                setShowAddDialog(true);
-              }}
-              className="gradient-primary text-white border-0"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Custom Exercise
-            </Button>
-          </div>
-
+        <TabsContent value="my" className="space-y-4">
           {myExercises.length === 0 ? (
             <Card className="p-12 rounded-xl border-0 shadow-md text-center">
               <Dumbbell className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <h3 className="mb-2" style={{ fontWeight: 600 }}>Your exercise list is empty</h3>
-              <p className="text-gray-600">Add exercises from "All Exercises" or create custom ones</p>
+              <h3 className="mb-2" style={{ fontWeight: 600 }}>No Exercises Yet</h3>
+              <p className="text-gray-600 mb-4">Add exercises from public tab or create your own</p>
+              <Button
+                className="gradient-primary text-white border-0"
+                onClick={() => setShowAddDialog(true)}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create Custom Exercise
+              </Button>
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {myExercises.map((exercise) => (
-                <ExerciseCard key={exercise.id} exercise={exercise} showActions />
+                <ExerciseCard key={exercise.id} exercise={exercise} showActions={true} />
               ))}
             </div>
           )}
         </TabsContent>
       </Tabs>
 
-      {/* Exercise Details Dialog */}
+      {/* Weekly Progress Card */}
+      <Card className="p-6 rounded-xl border-0 shadow-md">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-400 flex items-center justify-center">
+            <TrendingUp className="w-5 h-5 text-white" />
+          </div>
+          <h3 style={{ fontWeight: 600 }}>Your Progress</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="p-4 bg-gradient-to-br from-[#00C78C]/10 to-[#00E6A0]/10 rounded-lg">
+            <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Available Exercises</p>
+            <p className="text-[#00C78C]" style={{ fontSize: '2rem', fontWeight: 700 }}>{exercises.length}</p>
+          </div>
+          <div className="p-4 bg-blue-50 rounded-lg">
+            <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>My Custom</p>
+            <p className="text-blue-600" style={{ fontSize: '2rem', fontWeight: 700 }}>{myExercises.length}</p>
+          </div>
+          <div className="p-4 bg-orange-50 rounded-lg">
+            <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Avg Duration</p>
+            <p className="text-orange-600" style={{ fontSize: '2rem', fontWeight: 700 }}>
+              {exercises.length > 0 ? Math.round(exercises.reduce((sum, e) => sum + e.duration, 0) / exercises.length) : 0} min
+            </p>
+          </div>
+          <div className="p-4 bg-green-50 rounded-lg">
+            <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Total Calories</p>
+            <p className="text-green-600" style={{ fontSize: '2rem', fontWeight: 700 }}>
+              {exercises.reduce((sum, e) => sum + e.caloriesBurned, 0)}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Details Dialog */}
       <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{selectedExercise?.title}</DialogTitle>
           </DialogHeader>
           {selectedExercise && (
-            <div className="space-y-6">
-              <ImageWithFallback
-                src={selectedExercise.image}
-                alt={selectedExercise.title}
-                className="w-full h-64 object-cover rounded-lg"
-              />
-
+            <div className="space-y-4">
+              <div className="relative h-64 rounded-lg overflow-hidden">
+                <ImageWithFallback
+                  src={selectedExercise.image}
+                  alt={selectedExercise.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <Clock className="w-6 h-6 text-blue-500 mx-auto mb-1" />
-                  <p style={{ fontWeight: 600 }}>{selectedExercise.duration} min</p>
-                  <p className="text-gray-600" style={{ fontSize: '0.75rem' }}>Duration</p>
+                  <Clock className="w-5 h-5 text-blue-500 mx-auto mb-1" />
+                  <p className="text-sm text-gray-600">Duration</p>
+                  <p className="font-semibold">{selectedExercise.duration} min</p>
                 </div>
                 <div className="text-center p-3 bg-orange-50 rounded-lg">
-                  <Flame className="w-6 h-6 text-orange-500 mx-auto mb-1" />
-                  <p style={{ fontWeight: 600 }}>{selectedExercise.caloriesBurned}</p>
-                  <p className="text-gray-600" style={{ fontSize: '0.75rem' }}>Calories</p>
+                  <Flame className="w-5 h-5 text-orange-500 mx-auto mb-1" />
+                  <p className="text-sm text-gray-600">Calories</p>
+                  <p className="font-semibold">{selectedExercise.caloriesBurned} cal</p>
                 </div>
-                <div className="text-center p-3 bg-purple-50 rounded-lg">
-                  <Dumbbell className="w-6 h-6 text-purple-500 mx-auto mb-1" />
-                  <p style={{ fontWeight: 600 }}>{selectedExercise.difficulty}</p>
-                  <p className="text-gray-600" style={{ fontSize: '0.75rem' }}>Level</p>
+                <div className="text-center p-3 bg-green-50 rounded-lg">
+                  <Dumbbell className="w-5 h-5 text-green-500 mx-auto mb-1" />
+                  <p className="text-sm text-gray-600">Level</p>
+                  <p className="font-semibold">{selectedExercise.difficulty}</p>
                 </div>
               </div>
 
               <div>
-                <h4 className="mb-2" style={{ fontWeight: 600 }}>Muscle Group</h4>
-                <p className="text-gray-700">{selectedExercise.muscleGroup}</p>
+                <h4 className="font-semibold mb-2">Description</h4>
+                <p className="text-gray-600">{selectedExercise.description}</p>
               </div>
 
-              <div>
-                <h4 className="mb-2" style={{ fontWeight: 600 }}>Description</h4>
-                <p className="text-gray-700">{selectedExercise.description}</p>
-              </div>
-
-              {selectedExercise.steps && selectedExercise.steps.length > 0 && (
+              {selectedExercise.steps.length > 0 && (
                 <div>
-                  <h4 className="mb-3" style={{ fontWeight: 600 }}>Instructions</h4>
+                  <h4 className="font-semibold mb-2">Exercise Steps</h4>
                   <ol className="list-decimal list-inside space-y-2">
-                    {selectedExercise.steps.map((step, idx) => (
-                      <li key={idx} className="text-gray-700">{step}</li>
+                    {selectedExercise.steps.map((step, index) => (
+                      <li key={index} className="text-gray-600">{step}</li>
                     ))}
                   </ol>
                 </div>
@@ -381,8 +505,8 @@ export function ExercisePlansNew() {
               <Button
                 className="w-full gradient-primary text-white border-0"
                 onClick={() => {
-                  setShowDetailsDialog(false);
                   handleStartWorkout(selectedExercise);
+                  setShowDetailsDialog(false);
                 }}
               >
                 <Play className="w-4 h-4 mr-2" />
@@ -393,102 +517,8 @@ export function ExercisePlansNew() {
         </DialogContent>
       </Dialog>
 
-      {/* Workout Timer Dialog */}
-      <Dialog open={showWorkoutDialog} onOpenChange={(open) => {
-        if (!open) {
-          setShowWorkoutDialog(false);
-          setIsTimerRunning(false);
-        }
-      }}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{selectedExercise?.title} - Workout Session</DialogTitle>
-          </DialogHeader>
-          {selectedExercise && (
-            <div className="space-y-6">
-              {/* Timer Display */}
-              <div className="text-center p-8 bg-gradient-to-br from-[#00C78C]/10 to-[#00E6A0]/10 rounded-xl">
-                <div className="text-6xl mb-4" style={{ fontWeight: 700, color: '#00C78C' }}>
-                  {formatTime(workoutTimer)}
-                </div>
-                <p className="text-gray-600">
-                  Target: {selectedExercise.duration} minutes
-                </p>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div
-                  className="gradient-primary h-3 rounded-full transition-all"
-                  style={{
-                    width: `${Math.min((workoutTimer / (selectedExercise.duration * 60)) * 100, 100)}%`
-                  }}
-                />
-              </div>
-
-              {/* Current Step */}
-              {selectedExercise.steps && selectedExercise.steps.length > 0 && (
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="mb-2" style={{ fontWeight: 600 }}>
-                    Step {currentStep + 1} of {selectedExercise.steps.length}
-                  </h4>
-                  <p className="text-gray-700">{selectedExercise.steps[currentStep]}</p>
-                  <div className="flex gap-2 mt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
-                      disabled={currentStep === 0}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentStep(Math.min(selectedExercise.steps.length - 1, currentStep + 1))}
-                      disabled={currentStep === selectedExercise.steps.length - 1}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Timer Controls */}
-              <div className="flex gap-3">
-                {!isTimerRunning ? (
-                  <Button
-                    className="flex-1 gradient-primary text-white border-0"
-                    onClick={() => setIsTimerRunning(true)}
-                  >
-                    <Play className="w-4 h-4 mr-2" />
-                    Start
-                  </Button>
-                ) : (
-                  <Button
-                    className="flex-1"
-                    variant="outline"
-                    onClick={() => setIsTimerRunning(false)}
-                  >
-                    <Pause className="w-4 h-4 mr-2" />
-                    Pause
-                  </Button>
-                )}
-                <Button
-                  className="flex-1 bg-green-600 text-white border-0 hover:bg-green-700"
-                  onClick={handleFinishWorkout}
-                >
-                  <Check className="w-4 h-4 mr-2" />
-                  Finish
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Add/Edit Exercise Dialog */}
-      <Dialog open={showAddDialog || showEditDialog} onOpenChange={(open) => {
+      {/* Add/Edit Dialog */}
+      <Dialog open={showAddDialog || showEditDialog} onOpenChange={(open: boolean) => {
         if (!open) {
           setShowAddDialog(false);
           setShowEditDialog(false);
@@ -501,39 +531,43 @@ export function ExercisePlansNew() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Exercise Name</Label>
+                <Label htmlFor="title">Exercise Title *</Label>
                 <Input
+                  id="title"
+                  placeholder="e.g., Morning Yoga"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="e.g., Push-ups"
-                  className="mt-2"
                 />
               </div>
               <div>
-                <Label>Muscle Group</Label>
+                <Label htmlFor="muscleGroup">Muscle Group</Label>
                 <Input
+                  id="muscleGroup"
+                  placeholder="e.g., Full Body, Core, Legs"
                   value={formData.muscleGroup}
                   onChange={(e) => setFormData({ ...formData, muscleGroup: e.target.value })}
-                  placeholder="e.g., Chest, Legs"
-                  className="mt-2"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <Label>Duration (min)</Label>
+                <Label htmlFor="duration">Duration (min) *</Label>
                 <Input
+                  id="duration"
                   type="number"
+                  placeholder="30"
                   value={formData.duration}
                   onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                  className="mt-2"
                 />
               </div>
               <div>
-                <Label>Difficulty</Label>
-                <Select value={formData.difficulty} onValueChange={(value: any) => setFormData({ ...formData, difficulty: value })}>
-                  <SelectTrigger className="mt-2">
+                <Label htmlFor="difficulty">Difficulty</Label>
+                <Select
+                  value={formData.difficulty}
+                  onValueChange={(value: string) => setFormData({ ...formData, difficulty: value as any })}
+                >
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -544,34 +578,36 @@ export function ExercisePlansNew() {
                 </Select>
               </div>
               <div>
-                <Label>Calories Burned</Label>
+                <Label htmlFor="calories">Calories Burned</Label>
                 <Input
+                  id="calories"
                   type="number"
+                  placeholder="200"
                   value={formData.caloriesBurned}
                   onChange={(e) => setFormData({ ...formData, caloriesBurned: e.target.value })}
-                  className="mt-2"
                 />
               </div>
             </div>
 
             <div>
-              <Label>Description</Label>
+              <Label htmlFor="description">Description</Label>
               <Textarea
+                id="description"
+                placeholder="Describe the exercise..."
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="mt-2"
-                placeholder="Brief description of the exercise"
+                rows={3}
               />
             </div>
 
             <div>
-              <Label>Instructions (one per line)</Label>
+              <Label htmlFor="steps">Steps (one per line)</Label>
               <Textarea
+                id="steps"
+                placeholder="Step 1: Warm up&#10;Step 2: Main exercise&#10;Step 3: Cool down"
                 value={formData.steps}
                 onChange={(e) => setFormData({ ...formData, steps: e.target.value })}
-                className="mt-2"
-                rows={6}
-                placeholder="Step 1&#10;Step 2&#10;Step 3..."
+                rows={5}
               />
             </div>
           </div>
@@ -579,9 +615,14 @@ export function ExercisePlansNew() {
             <Button variant="outline" onClick={() => {
               setShowAddDialog(false);
               setShowEditDialog(false);
-            }}>Cancel</Button>
-            <Button onClick={showAddDialog ? handleAddCustomExercise : handleEditExercise} className="gradient-primary text-white border-0">
-              {showAddDialog ? 'Create' : 'Save'}
+            }}>
+              Cancel
+            </Button>
+            <Button
+              className="gradient-primary text-white border-0"
+              onClick={showAddDialog ? handleAddCustomExercise : handleEditExercise}
+            >
+              {showAddDialog ? 'Create Exercise' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>

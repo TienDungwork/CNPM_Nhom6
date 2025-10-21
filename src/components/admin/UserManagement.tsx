@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { useData } from '../DataContext';
+import { adminAPI } from '../../services/adminAPI';
 import { Users, Shield, UserX, UserCheck, Plus, Edit2, Trash2, Search, Calendar } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import {
   Table,
   TableBody,
@@ -30,14 +30,25 @@ import {
   SelectValue,
 } from '../ui/select';
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'user' | 'admin';
+  status: 'active' | 'inactive';
+  createdAt: string;
+}
+
 export function UserManagement() {
-  const { users, addUser, updateUser, deleteUser, updateUserStatus, getUserPlanners } = useData();
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | 'user' | 'admin'>('all');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showPlannerDialog, setShowPlannerDialog] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [planners, setPlanners] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -45,19 +56,66 @@ export function UserManagement() {
     role: 'user' as 'user' | 'admin',
   });
 
-  const userList = users.filter(u => {
+  // Load users from backend
+  const loadUsers = async () => {
+    try {
+      console.log('[UserManagement] Starting to load users...');
+      setLoading(true);
+      const response = await adminAPI.getAllUsers();
+      console.log('[UserManagement] Received response:', response);
+      console.log('[UserManagement] Response.users type:', Array.isArray(response.users));
+      console.log('[UserManagement] First user sample:', response.users?.[0]);
+      setUsers(response.users || []);
+      console.log('[UserManagement] Users loaded successfully:', response.users?.length || 0);
+    } catch (error) {
+      console.error('[UserManagement] Failed to load users:', error);
+      toast.error('Không thể tải danh sách người dùng');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const userList = users.filter((u: User) => {
+    if (!u) {
+      console.warn('[UserManagement] Found null/undefined user');
+      return false;
+    }
+    if (!u.name) {
+      console.warn('[UserManagement] User missing name:', u);
+      return false;
+    }
+    if (!u.email) {
+      console.warn('[UserManagement] User missing email:', u);
+      return false;
+    }
     const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          u.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = filterRole === 'all' || u.role === filterRole;
     return matchesSearch && matchesRole;
   });
 
-  const handleToggleStatus = (userId: string, currentStatus: boolean) => {
-    updateUserStatus(userId, !currentStatus);
-    toast.success(!currentStatus ? 'User activated' : 'User deactivated');
+  console.log('[UserManagement] users array length:', users.length);
+  console.log('[UserManagement] userList after filter:', userList.length);
+  console.log('[UserManagement] searchTerm:', searchTerm);
+  console.log('[UserManagement] filterRole:', filterRole);
+
+  const handleToggleStatus = async (userId: string, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+      await adminAPI.updateUser(userId, { status: newStatus });
+      await loadUsers(); // Reload to get fresh data
+      toast.success(newStatus === 'active' ? 'User activated' : 'User deactivated');
+    } catch (error) {
+      console.error('Failed to toggle status:', error);
+      toast.error('Không thể cập nhật trạng thái người dùng');
+    }
   };
 
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     if (!formData.name || !formData.email || !formData.password) {
       toast.error('Vui lòng điền đầy đủ thông tin!');
       return;
@@ -69,24 +127,25 @@ export function UserManagement() {
       return;
     }
 
-    if (users.some(u => u.email === formData.email)) {
+    if (users.some((u: User) => u.email === formData.email)) {
       toast.error('Email này đã tồn tại!');
       return;
     }
 
-    addUser({
-      name: formData.name,
-      email: formData.email,
-      role: formData.role,
-      isActive: true,
-    });
-
-    toast.success('User created successfully!');
-    setShowAddDialog(false);
-    setFormData({ name: '', email: '', password: '', role: 'user' });
+    try {
+      // Note: User creation should go through registration endpoint
+      // For now, we'll show an error as admin cannot directly create users via API
+      toast.error('Chức năng tạo người dùng cần được thực hiện qua đăng ký');
+      // TODO: Implement admin user creation endpoint
+      setShowAddDialog(false);
+      setFormData({ name: '', email: '', password: '', role: 'user' });
+    } catch (error) {
+      console.error('Failed to create user:', error);
+      toast.error('Không thể tạo người dùng mới');
+    }
   };
 
-  const handleEditUser = () => {
+  const handleEditUser = async () => {
     if (!selectedUser) return;
 
     if (!formData.name || !formData.email) {
@@ -100,25 +159,36 @@ export function UserManagement() {
       return;
     }
 
-    updateUser(selectedUser.id, {
-      name: formData.name,
-      email: formData.email,
-      role: formData.role,
-    });
-
-    toast.success('User updated successfully!');
-    setShowEditDialog(false);
-    setSelectedUser(null);
-  };
-
-  const handleDeleteUser = (userId: string, userName: string) => {
-    if (window.confirm(`Bạn có chắc muốn xóa người dùng "${userName}" không?`)) {
-      deleteUser(userId);
-      toast.success('User deleted successfully!');
+    try {
+      await adminAPI.updateUser(selectedUser.id, {
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+      });
+      await loadUsers(); // Reload to get fresh data
+      toast.success('User updated successfully!');
+      setShowEditDialog(false);
+      setSelectedUser(null);
+    } catch (error) {
+      console.error('Failed to update user:', error);
+      toast.error('Không thể cập nhật người dùng');
     }
   };
 
-  const openEditDialog = (user: any) => {
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (window.confirm(`Bạn có chắc muốn xóa người dùng "${userName}" không?`)) {
+      try {
+        await adminAPI.deleteUser(userId);
+        await loadUsers(); // Reload to get fresh data
+        toast.success('User deleted successfully!');
+      } catch (error) {
+        console.error('Failed to delete user:', error);
+        toast.error('Không thể xóa người dùng');
+      }
+    }
+  };
+
+  const openEditDialog = (user: User) => {
     setSelectedUser(user);
     setFormData({
       name: user.name,
@@ -185,7 +255,7 @@ export function UserManagement() {
             <div>
               <p className="text-gray-600" style={{ fontSize: '0.875rem' }}>Active Users</p>
               <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>
-                {userList.filter(u => u.isActive).length}
+                {userList.filter((u: User) => u.status === 'active').length}
               </p>
             </div>
           </div>
@@ -199,7 +269,7 @@ export function UserManagement() {
             <div>
               <p className="text-gray-600" style={{ fontSize: '0.875rem' }}>Inactive Users</p>
               <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>
-                {userList.filter(u => !u.isActive).length}
+                {userList.filter((u: User) => u.status === 'inactive').length}
               </p>
             </div>
           </div>
@@ -238,7 +308,12 @@ export function UserManagement() {
           <Badge variant="secondary">{userList.length} users</Badge>
         </div>
 
-        {userList.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-12 text-gray-400">
+            <Users className="w-16 h-16 mx-auto mb-4 opacity-20 animate-pulse" />
+            <p>Loading users...</p>
+          </div>
+        ) : userList.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
             <Users className="w-16 h-16 mx-auto mb-4 opacity-20" />
             <p>No users found</p>
@@ -267,8 +342,8 @@ export function UserManagement() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge className={user.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-                      {user.isActive ? 'Active' : 'Inactive'}
+                    <Badge className={user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+                      {user.status === 'active' ? 'Active' : 'Inactive'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-gray-600">{formatDate(user.createdAt)}</TableCell>
@@ -295,11 +370,11 @@ export function UserManagement() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleToggleStatus(user.id, user.isActive)}
-                        className={user.isActive ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'}
-                        title={user.isActive ? 'Deactivate' : 'Activate'}
+                        onClick={() => handleToggleStatus(user.id, user.status)}
+                        className={user.status === 'active' ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'}
+                        title={user.status === 'active' ? 'Deactivate' : 'Activate'}
                       >
-                        {user.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                        {user.status === 'active' ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                       </Button>
                       {user.role !== 'admin' && (
                         <Button
@@ -433,31 +508,13 @@ export function UserManagement() {
             <DialogTitle>User Planner - {selectedUser?.name}</DialogTitle>
           </DialogHeader>
           <div className="py-4 max-h-96 overflow-y-auto">
-            {selectedUser && (() => {
-              const planners = getUserPlanners(selectedUser.id, today);
-              return planners.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
-                  <Calendar className="w-12 h-12 mx-auto mb-2 opacity-20" />
-                  <p>No planner data for today</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {planners.map((planner) => (
-                    <div key={planner.id} className="p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span style={{ fontWeight: 600 }}>{planner.time}</span>
-                        <span className="text-gray-500">•</span>
-                        <span className="text-gray-600">{planner.type}</span>
-                        {planner.completed && (
-                          <Badge className="bg-green-100 text-green-700 ml-auto">Completed</Badge>
-                        )}
-                      </div>
-                      <p className="text-gray-700">{planner.description}</p>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
+            {selectedUser && (
+              <div className="text-center py-8 text-gray-400">
+                <Calendar className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                <p>Planner feature coming soon</p>
+                <p className="text-sm mt-2">This feature requires backend API implementation</p>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

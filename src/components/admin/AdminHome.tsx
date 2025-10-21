@@ -1,8 +1,18 @@
 import { Card } from '../ui/card';
 import { Users, FileText, MessageSquare, TrendingUp, Activity } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { useData } from '../DataContext';
 import { Badge } from '../ui/badge';
+import { useState, useEffect } from 'react';
+import { adminAPI } from '../../services/adminAPI';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'user' | 'admin';
+  status: 'active' | 'inactive';
+  createdAt: string;
+}
 
 const userGrowthData = [
   { month: 'Jan', users: 120 },
@@ -24,9 +34,64 @@ const activityData = [
 ];
 
 export function AdminHome() {
-  const { getStatistics, getRecentUsers, feedbacks } = useData();
-  const stats = getStatistics();
-  const recentUsers = getRecentUsers(3);
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeUsers: 0,
+    totalMeals: 0,
+    totalExercises: 0,
+    totalFeedback: 0,
+    pendingFeedback: 0,
+    resolvedFeedback: 0
+  });
+  const [recentUsers, setRecentUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [statsResponse, usersResponse] = await Promise.all([
+        adminAPI.getDashboardStats(),
+        adminAPI.getAllUsers()
+      ]);
+
+      setStats({
+        totalUsers: statsResponse.statistics?.totalUsers || 0,
+        activeUsers: statsResponse.statistics?.activeUsers || 0,
+        totalMeals: statsResponse.statistics?.totalMeals || 0,
+        totalExercises: statsResponse.statistics?.totalExercises || 0,
+        totalFeedback: statsResponse.statistics?.totalFeedback || 0,
+        pendingFeedback: statsResponse.statistics?.pendingFeedback || 0,
+        resolvedFeedback: statsResponse.statistics?.resolvedFeedback || 0
+      });
+
+      // Get 3 most recent users
+      const users = usersResponse.users || [];
+      const sorted = users.sort((a: User, b: User) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setRecentUsers(sorted.slice(0, 3));
+
+      setLoading(false);
+    } catch (error) {
+      console.error('[AdminHome] Failed to load data:', error);
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <Activity className="w-16 h-16 mx-auto mb-4 opacity-20 animate-pulse" />
+          <p className="text-gray-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -90,16 +155,16 @@ export function AdminHome() {
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-400 flex items-center justify-center">
               <MessageSquare className="w-6 h-6 text-white" />
             </div>
-            {stats.pendingFeedbacks > 0 && (
+            {stats.pendingFeedback > 0 && (
               <Badge className="bg-orange-100 text-orange-700">
-                {stats.pendingFeedbacks} new
+                {stats.pendingFeedback} new
               </Badge>
             )}
           </div>
           <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Feedback</p>
-          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>{stats.totalFeedbacks}</p>
+          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>{stats.totalFeedback}</p>
           <p className="text-gray-500 mt-1" style={{ fontSize: '0.75rem' }}>
-            {stats.pendingFeedbacks} pending review
+            {stats.pendingFeedback} pending review
           </p>
         </Card>
       </div>
@@ -152,14 +217,14 @@ export function AdminHome() {
       {/* Recent Activity */}
       <Card className="p-6 rounded-xl border-0 shadow-md">
         <h3 className="mb-6" style={{ fontWeight: 600 }}>Recent Activity</h3>
-        {recentUsers.length === 0 && feedbacks.length === 0 ? (
+        {recentUsers.length === 0 ? (
           <div className="text-center py-8 text-gray-400">
             <Activity className="w-12 h-12 mx-auto mb-2 opacity-20" />
             <p style={{ fontSize: '0.875rem' }}>No recent activity</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {recentUsers.slice(0, 2).map((user) => (
+            {recentUsers.map((user) => (
               <div key={user.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
                 <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
                   <Users className="w-5 h-5 text-green-600" />
@@ -171,23 +236,6 @@ export function AdminHome() {
                 <span className="text-gray-500" style={{ fontSize: '0.875rem' }}>
                   {new Date(user.createdAt).toLocaleDateString()}
                 </span>
-              </div>
-            ))}
-
-            {feedbacks.slice(0, 2).map((feedback) => (
-              <div key={feedback.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-                  <MessageSquare className="w-5 h-5 text-purple-600" />
-                </div>
-                <div className="flex-1">
-                  <p style={{ fontWeight: 600 }}>New feedback submitted</p>
-                  <p className="text-gray-600" style={{ fontSize: '0.875rem' }}>
-                    {feedback.category}: {feedback.message.substring(0, 50)}...
-                  </p>
-                </div>
-                {feedback.status === 'Pending' && (
-                  <Badge className="bg-yellow-100 text-yellow-700">New</Badge>
-                )}
               </div>
             ))}
           </div>

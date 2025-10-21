@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -8,12 +8,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { useData, Exercise } from '../DataContext';
+import { adminAPI } from '../../services/adminAPI';
+import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { Plus, Edit2, Trash2, Eye, EyeOff, Search } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+
+interface Exercise {
+  id: string;
+  title: string;
+  muscleGroup: string;
+  duration: number;
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  caloriesBurned: number;
+  description: string;
+  stepsJson: string;
+  image: string;
+  source: string;
+  status: 'public' | 'private';
+  createdAt: string;
+}
 
 export function ExerciseManagement() {
-  const { exercises, userExercises, addExercise, updateExercise, deleteExercise } = useData();
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
@@ -32,70 +49,123 @@ export function ExerciseManagement() {
     image: '',
   });
 
-  const filteredExercises = exercises.filter(exercise => {
+  // Load exercises from backend
+  const loadExercises = async () => {
+    try {
+      console.log('[ExerciseManagement] Loading exercises...');
+      setLoading(true);
+      const response = await adminAPI.getAllExercises();
+      const exercisesData = response.exercises || [];
+      // Parse JSON strings for steps
+      const parsedExercises = exercisesData.map((exercise: any) => {
+        let steps = [];
+        try {
+          steps = exercise.stepsJson ? JSON.parse(exercise.stepsJson) : [];
+        } catch (e) {
+          console.warn('Failed to parse exercise JSON:', exercise.id, e);
+        }
+        return {
+          ...exercise,
+          steps,
+        };
+      });
+      setExercises(parsedExercises);
+      console.log('[ExerciseManagement] Exercises loaded:', parsedExercises.length);
+    } catch (error) {
+      console.error('[ExerciseManagement] Failed to load exercises:', error);
+      toast.error('Không thể tải danh sách bài tập');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadExercises();
+  }, []);
+
+  const filteredExercises = exercises.filter((exercise: Exercise) => {
+    if (!exercise || !exercise.title) return false;
     const matchesSearch = exercise.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         exercise.muscleGroup.toLowerCase().includes(searchTerm.toLowerCase());
+                         (exercise.muscleGroup || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDifficulty = filterDifficulty === 'all' || exercise.difficulty === filterDifficulty;
     const matchesStatus = filterStatus === 'all' || exercise.status === filterStatus;
     return matchesSearch && matchesDifficulty && matchesStatus;
   });
 
-  const handleAddExercise = () => {
+  const handleAddExercise = async () => {
     if (!formData.title || !formData.duration) {
       toast.error('Please fill in title and duration!');
       return;
     }
 
-    const newExercise: Omit<Exercise, 'id'> = {
-      title: formData.title,
-      muscleGroup: formData.muscleGroup || 'General',
-      duration: parseInt(formData.duration),
-      difficulty: formData.difficulty,
-      caloriesBurned: parseInt(formData.caloriesBurned) || 100,
-      image: formData.image || 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400',
-      description: formData.description,
-      steps: formData.steps.split('\n').filter(s => s.trim()),
-      source: 'admin',
-      status: 'public',
-    };
-
-    addExercise(newExercise);
-    toast.success('Exercise added successfully!');
-    setShowAddDialog(false);
-    resetForm();
-  };
-
-  const handleEditExercise = () => {
-    if (!editingExercise) return;
-
-    updateExercise(editingExercise.id, {
-      title: formData.title,
-      muscleGroup: formData.muscleGroup,
-      duration: parseInt(formData.duration),
-      difficulty: formData.difficulty,
-      caloriesBurned: parseInt(formData.caloriesBurned) || 100,
-      image: formData.image || editingExercise.image,
-      description: formData.description,
-      steps: formData.steps.split('\n').filter(s => s.trim()),
-    });
-
-    toast.success('Exercise updated!');
-    setShowEditDialog(false);
-    setEditingExercise(null);
-  };
-
-  const handleDeleteExercise = (exerciseId: string, exerciseTitle: string) => {
-    if (window.confirm(`Delete exercise "${exerciseTitle}"? This will not affect user copies.`)) {
-      deleteExercise(exerciseId);
-      toast.success('Exercise deleted');
+    try {
+      await adminAPI.createExercise({
+        title: formData.title,
+        muscleGroup: formData.muscleGroup || 'General',
+        duration: parseInt(formData.duration),
+        difficulty: formData.difficulty,
+        caloriesBurned: parseInt(formData.caloriesBurned) || 100,
+        image: formData.image || 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400',
+        description: formData.description,
+        steps: formData.steps.split('\n').filter(s => s.trim()),
+      });
+      await loadExercises();
+      toast.success('Exercise added successfully!');
+      setShowAddDialog(false);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to create exercise:', error);
+      toast.error('Không thể tạo bài tập mới');
     }
   };
 
-  const handleToggleStatus = (exercise: Exercise) => {
-    updateExercise(exercise.id, {
-      status: exercise.status === 'public' ? 'hidden' : 'public'
-    });
-    toast.success(`Exercise ${exercise.status === 'public' ? 'hidden' : 'published'}`);
+  const handleEditExercise = async () => {
+    if (!editingExercise) return;
+
+    try {
+      await adminAPI.updateExercise(editingExercise.id, {
+        title: formData.title,
+        muscleGroup: formData.muscleGroup,
+        duration: parseInt(formData.duration),
+        difficulty: formData.difficulty,
+        caloriesBurned: parseInt(formData.caloriesBurned) || 100,
+        image: formData.image || editingExercise.image,
+        description: formData.description,
+        steps: formData.steps.split('\n').filter(s => s.trim()),
+      });
+      await loadExercises();
+      toast.success('Exercise updated!');
+      setShowEditDialog(false);
+      setEditingExercise(null);
+    } catch (error) {
+      console.error('Failed to update exercise:', error);
+      toast.error('Không thể cập nhật bài tập');
+    }
+  };
+
+  const handleDeleteExercise = async (exerciseId: string, exerciseTitle: string) => {
+    if (window.confirm(`Delete exercise "${exerciseTitle}"?`)) {
+      try {
+        await adminAPI.deleteExercise(exerciseId);
+        await loadExercises();
+        toast.success('Exercise deleted');
+      } catch (error) {
+        console.error('Failed to delete exercise:', error);
+        toast.error('Không thể xóa bài tập');
+      }
+    }
+  };
+
+  const handleToggleStatus = async (exercise: Exercise) => {
+    try {
+      const newStatus = exercise.status === 'public' ? ('hidden' as 'hidden') : ('public' as 'public');
+      await adminAPI.updateExercise(exercise.id, { status: newStatus });
+      await loadExercises();
+      toast.success(`Exercise ${newStatus === 'public' ? 'published' : 'hidden'}`);
+    } catch (error) {
+      console.error('Failed to toggle status:', error);
+      toast.error('Không thể thay đổi trạng thái');
+    }
   };
 
   const openEditDialog = (exercise: Exercise) => {
@@ -107,7 +177,7 @@ export function ExerciseManagement() {
       difficulty: exercise.difficulty,
       caloriesBurned: exercise.caloriesBurned.toString(),
       description: exercise.description,
-      steps: exercise.steps.join('\n'),
+      steps: (exercise as any).steps?.join('\n') || '',
       image: exercise.image,
     });
     setShowEditDialog(true);
@@ -126,19 +196,12 @@ export function ExerciseManagement() {
     });
   };
 
-  const userExerciseStats = userExercises.reduce((acc, ue) => {
-    if (ue.baseExerciseId) {
-      acc[ue.baseExerciseId] = (acc[ue.baseExerciseId] || 0) + 1;
-    }
-    return acc;
-  }, {} as Record<string, number>);
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="mb-2" style={{ fontSize: '2rem', fontWeight: 600 }}>Exercise Management</h1>
-          <p className="text-gray-600">Manage exercise database and user submissions</p>
+          <p className="text-gray-600">Manage exercise database</p>
         </div>
         <Button onClick={() => { resetForm(); setShowAddDialog(true); }} className="gradient-primary text-white border-0">
           <Plus className="w-4 h-4 mr-2" />
@@ -186,7 +249,7 @@ export function ExerciseManagement() {
       </Card>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-4 rounded-xl border-0 shadow-md">
           <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Total Exercises</p>
           <p style={{ fontSize: '2rem', fontWeight: 700, color: '#00C78C' }}>{exercises.length}</p>
@@ -194,23 +257,25 @@ export function ExerciseManagement() {
         <Card className="p-4 rounded-xl border-0 shadow-md">
           <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Public</p>
           <p style={{ fontSize: '2rem', fontWeight: 700, color: '#00C78C' }}>
-            {exercises.filter(e => e.status === 'public').length}
+            {exercises.filter((e: Exercise) => e.status === 'public').length}
           </p>
         </Card>
         <Card className="p-4 rounded-xl border-0 shadow-md">
-          <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Hidden</p>
+          <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Private</p>
           <p style={{ fontSize: '2rem', fontWeight: 700, color: '#FF9800' }}>
-            {exercises.filter(e => e.status === 'hidden').length}
+            {exercises.filter((e: Exercise) => e.status === 'private').length}
           </p>
-        </Card>
-        <Card className="p-4 rounded-xl border-0 shadow-md">
-          <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>User Copies</p>
-          <p style={{ fontSize: '2rem', fontWeight: 700, color: '#2196F3' }}>{userExercises.length}</p>
         </Card>
       </div>
 
       {/* Exercises Table */}
       <Card className="rounded-xl border-0 shadow-md overflow-hidden">
+        {loading ? (
+          <div className="text-center py-12 text-gray-400">
+            <Search className="w-16 h-16 mx-auto mb-4 opacity-20 animate-pulse" />
+            <p>Loading exercises...</p>
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -222,14 +287,13 @@ export function ExerciseManagement() {
                 <TableHead>Difficulty</TableHead>
                 <TableHead>Calories</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>User Copies</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredExercises.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                     No exercises found
                   </TableCell>
                 </TableRow>
@@ -239,7 +303,7 @@ export function ExerciseManagement() {
                     <TableCell style={{ fontSize: '0.875rem' }}>#{exercise.id.slice(0, 6)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <img
+                        <ImageWithFallback
                           src={exercise.image}
                           alt={exercise.title}
                           className="w-10 h-10 rounded-lg object-cover"
@@ -265,9 +329,6 @@ export function ExerciseManagement() {
                       <Badge className={exercise.status === 'public' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                         {exercise.status}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{userExerciseStats[exercise.id] || 0} users</Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -306,10 +367,11 @@ export function ExerciseManagement() {
             </TableBody>
           </Table>
         </div>
+        )}
       </Card>
 
       {/* Add/Edit Dialog */}
-      <Dialog open={showAddDialog || showEditDialog} onOpenChange={(open) => {
+      <Dialog open={showAddDialog || showEditDialog} onOpenChange={(open: boolean) => {
         if (!open) {
           setShowAddDialog(false);
           setShowEditDialog(false);

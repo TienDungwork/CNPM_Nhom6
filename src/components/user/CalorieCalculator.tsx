@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Calculator, Activity } from 'lucide-react';
+import { Calculator, Activity, Save } from 'lucide-react';
+import { toast } from 'sonner';
 
 export function CalorieCalculator() {
   const [age, setAge] = useState('');
@@ -12,7 +13,118 @@ export function CalorieCalculator() {
   const [height, setHeight] = useState('');
   const [gender, setGender] = useState('');
   const [activityLevel, setActivityLevel] = useState('');
+  const [goal, setGoal] = useState('maintain');
   const [result, setResult] = useState<number | null>(null);
+  const [bmi, setBmi] = useState<number | null>(null);
+  const [bmiCategory, setBmiCategory] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/profile', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      
+      if (data.hasProfile) {
+        const p = data.profile;
+        setAge(p.age.toString());
+        setWeight(p.weight.toString());
+        setHeight(p.height.toString());
+        setGender(p.gender);
+        setActivityLevel(p.activityLevel);
+        setGoal(p.goal);
+        setResult(p.calorieGoal);
+      }
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Load profile error:', error);
+      setIsLoading(false);
+    }
+  };
+
+  const saveProfile = async () => {
+    const w = parseFloat(weight);
+    const h = parseFloat(height);
+    const a = parseFloat(age);
+
+    if (!w || !h || !a || !gender || !activityLevel || !goal) {
+      toast.error('Please fill all fields');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          age: parseInt(age),
+          weight: w,
+          height: h,
+          gender,
+          activityLevel,
+          goal
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to save profile');
+      
+      const data = await response.json();
+      setResult(data.profile.calorieGoal);
+      
+      // Calculate BMI
+      const heightInMeters = h / 100; // convert cm to m
+      const calculatedBmi = w / (heightInMeters * heightInMeters);
+      setBmi(calculatedBmi);
+      setBmiCategory(getBmiCategory(calculatedBmi));
+      
+      toast.success('✅ Profile saved! Your calorie goal: ' + data.profile.calorieGoal + ' kcal/day');
+    } catch (error) {
+      console.error('Save profile error:', error);
+      toast.error('Failed to save profile');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const getBmiCategory = (bmiValue: number): string => {
+    if (bmiValue < 18.5) return 'Underweight';
+    if (bmiValue < 25) return 'Normal weight';
+    if (bmiValue < 30) return 'Overweight';
+    return 'Obese';
+  };
+
+  const getBmiColor = (bmiValue: number): string => {
+    if (bmiValue < 18.5) return 'text-blue-600';
+    if (bmiValue < 25) return 'text-green-600';
+    if (bmiValue < 30) return 'text-orange-600';
+    return 'text-red-600';
+  };
+
+  const getGoalDescription = (goalType: string): string => {
+    switch (goalType) {
+      case 'lose':
+        return 'Reduce 500 calories/day for gradual weight loss';
+      case 'maintain':
+        return 'Maintain current weight with balanced intake';
+      case 'gain':
+        return 'Add 500 calories/day for muscle building';
+      default:
+        return '';
+    }
+  };
 
   const calculateCalories = () => {
     const w = parseFloat(weight);
@@ -126,8 +238,36 @@ export function CalorieCalculator() {
               </Select>
             </div>
 
-            <Button onClick={calculateCalories} className="w-full gradient-primary text-white border-0">
-              Calculate
+            <div>
+              <Label htmlFor="goal">Goal</Label>
+              <Select value={goal} onValueChange={setGoal}>
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Select your goal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lose">Weight Loss (- 500 kcal)</SelectItem>
+                  <SelectItem value="maintain">Maintenance</SelectItem>
+                  <SelectItem value="gain">Weight Gain (+ 500 kcal)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button 
+              onClick={saveProfile} 
+              className="w-full gradient-primary text-white border-0"
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Profile & Calculate
+                </>
+              )}
             </Button>
           </div>
         </Card>
@@ -142,29 +282,57 @@ export function CalorieCalculator() {
 
           {result ? (
             <div className="space-y-6">
+              {/* Main Calorie Goal */}
               <div className="text-center p-8 bg-gradient-to-br from-[#00C78C]/10 to-[#00E6A0]/10 rounded-xl">
                 <p className="text-gray-600 mb-2">Daily Caloric Need</p>
                 <p className="text-[#00C78C]" style={{ fontSize: '3rem', fontWeight: 700 }}>{result}</p>
                 <p className="text-gray-600">calories per day</p>
               </div>
 
-              <div className="space-y-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <p style={{ fontWeight: 600 }} className="text-blue-900 mb-1">Weight Loss</p>
-                  <p className="text-blue-700">{result - 500} calories/day</p>
-                  <p className="text-blue-600" style={{ fontSize: '0.875rem' }}>Reduce 500 calories for gradual weight loss</p>
+              <div className="grid grid-cols-2 gap-4">
+                {/* BMI Card */}
+                <div className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl">
+                  <p className="text-gray-700 mb-2 text-center" style={{ fontSize: '0.875rem', fontWeight: 600 }}>Your BMI</p>
+                  <p className={`text-center mb-1 ${bmi ? getBmiColor(bmi) : 'text-gray-600'}`} style={{ fontSize: '2.5rem', fontWeight: 700 }}>
+                    {bmi ? bmi.toFixed(1) : '--'}
+                  </p>
+                  <p className="text-center text-gray-600" style={{ fontSize: '0.875rem' }}>
+                    {bmiCategory || 'Calculate to see BMI'}
+                  </p>
                 </div>
 
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <p style={{ fontWeight: 600 }} className="text-green-900 mb-1">Maintenance</p>
-                  <p className="text-green-700">{result} calories/day</p>
-                  <p className="text-green-600" style={{ fontSize: '0.875rem' }}>Maintain current weight</p>
+                {/* Goal Card */}
+                <div className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl">
+                  <p className="text-gray-700 mb-2 text-center" style={{ fontSize: '0.875rem', fontWeight: 600 }}>Your Goal</p>
+                  <p className="text-purple-900 text-center mb-1" style={{ fontSize: '1.5rem', fontWeight: 700 }}>
+                    {goal === 'lose' ? 'Weight Loss' : goal === 'gain' ? 'Weight Gain' : 'Maintenance'}
+                  </p>
+                  <p className="text-center text-gray-600" style={{ fontSize: '0.75rem' }}>
+                    {getGoalDescription(goal)}
+                  </p>
                 </div>
+              </div>
 
-                <div className="p-4 bg-orange-50 rounded-lg">
-                  <p style={{ fontWeight: 600 }} className="text-orange-900 mb-1">Weight Gain</p>
-                  <p className="text-orange-700">{result + 500} calories/day</p>
-                  <p className="text-orange-600" style={{ fontSize: '0.875rem' }}>Add 500 calories for muscle building</p>
+              {/* BMI Reference Chart */}
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-gray-700 mb-3" style={{ fontSize: '0.875rem', fontWeight: 600 }}>BMI Reference</p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-blue-600">● Underweight</span>
+                    <span className="text-gray-600">&lt; 18.5</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-green-600">● Normal weight</span>
+                    <span className="text-gray-600">18.5 - 24.9</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-orange-600">● Overweight</span>
+                    <span className="text-gray-600">25 - 29.9</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-red-600">● Obese</span>
+                    <span className="text-gray-600">≥ 30</span>
+                  </div>
                 </div>
               </div>
             </div>

@@ -24,6 +24,7 @@ import { MealManagement } from './components/admin/MealManagement';
 import { ExerciseManagement } from './components/admin/ExerciseManagement';
 import { FeedbackReview } from './components/admin/FeedbackReview';
 import { Statistics } from './components/admin/Statistics';
+import { ProjectReview } from './components/ProjectReview';
 import { Toaster } from './components/ui/sonner';
 
 function ProtectedRoute({ children, requiredRole }: { children: React.ReactNode; requiredRole?: 'user' | 'admin' }) {
@@ -47,6 +48,7 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignUpPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/project-review" element={<ProjectReview />} />
       
       {/* User Routes */}
       <Route path="/user" element={

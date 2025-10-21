@@ -319,3 +319,4 @@ PRINT '========================================';
 -- DECLARE @MealId UNIQUEIDENTIFIER = (SELECT TOP 1 Id FROM Meals);
 -- EXEC dbo.SP_CopyMealToUser @UserId, @MealId;
 -- SELECT * FROM dbo.UserMeals WHERE UserId = @UserId;
+

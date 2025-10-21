@@ -1,29 +1,77 @@
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
-import { useData } from '../DataContext';
+import { adminAPI } from '../../services/adminAPI';
 import { Users, Activity, MessageSquare, FileText, TrendingUp, Calendar } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 
-export function Statistics() {
-  const { getStatistics, users, feedbacks, waterLogs, sleepCycles } = useData();
-  const stats = getStatistics();
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
+}
 
-  // User growth simulation
+export function Statistics() {
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeUsers: 0,
+    totalMeals: 0,
+    totalExercises: 0,
+    totalFeedback: 0,
+    pendingFeedback: 0,
+  });
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        console.log('[Statistics] Starting to load data...');
+        setLoading(true);
+        
+        // Load statistics
+        const statsResponse = await adminAPI.getDashboardStats();
+        console.log('[Statistics] Stats response:', statsResponse);
+        setStats({
+          totalUsers: statsResponse.statistics?.totalUsers || 0,
+          activeUsers: statsResponse.statistics?.activeUsers || 0,
+          totalMeals: statsResponse.statistics?.totalMeals || 0,
+          totalExercises: statsResponse.statistics?.totalExercises || 0,
+          totalFeedback: statsResponse.statistics?.totalFeedback || 0,
+          pendingFeedback: statsResponse.statistics?.pendingFeedback || 0,
+        });
+        
+        // Load recent users
+        const usersResponse = await adminAPI.getAllUsers();
+        console.log('[Statistics] Users response:', usersResponse);
+        setUsers(usersResponse.users || []);
+      } catch (error) {
+        console.error('[Statistics] Failed to load data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
+
+  // User growth simulation - keeping mock data for charts
   const userGrowthData = [
-    { month: 'Jan', users: 50 },
-    { month: 'Feb', users: 75 },
-    { month: 'Mar', users: 120 },
-    { month: 'Apr', users: 185 },
-    { month: 'May', users: 280 },
+    { month: 'Jan', users: Math.round(stats.totalUsers * 0.2) },
+    { month: 'Feb', users: Math.round(stats.totalUsers * 0.3) },
+    { month: 'Mar', users: Math.round(stats.totalUsers * 0.5) },
+    { month: 'Apr', users: Math.round(stats.totalUsers * 0.7) },
+    { month: 'May', users: Math.round(stats.totalUsers * 0.9) },
     { month: 'Jun', users: stats.totalUsers },
   ];
 
-  // Feedback categories
+  // Feedback categories - mock data since feedback not implemented yet
   const feedbackCategories = [
-    { name: 'Feature', value: feedbacks.filter(f => f.category === 'feature').length, color: '#00C78C' },
-    { name: 'Bug', value: feedbacks.filter(f => f.category === 'bug').length, color: '#EF4444' },
-    { name: 'Improvement', value: feedbacks.filter(f => f.category === 'improvement').length, color: '#3B82F6' },
-    { name: 'General', value: feedbacks.filter(f => f.category === 'general').length, color: '#8B5CF6' },
-    { name: 'Other', value: feedbacks.filter(f => f.category === 'other').length, color: '#F59E0B' },
+    { name: 'Feature', value: Math.round(stats.totalFeedback * 0.3), color: '#00C78C' },
+    { name: 'Bug', value: Math.round(stats.totalFeedback * 0.2), color: '#EF4444' },
+    { name: 'Improvement', value: Math.round(stats.totalFeedback * 0.25), color: '#3B82F6' },
+    { name: 'General', value: Math.round(stats.totalFeedback * 0.15), color: '#8B5CF6' },
+    { name: 'Other', value: Math.round(stats.totalFeedback * 0.1), color: '#F59E0B' },
   ].filter(cat => cat.value > 0);
 
   // Activity data
@@ -71,7 +119,7 @@ export function Statistics() {
           </div>
           <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Engagement Rate</p>
           <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>
-            {Math.round((stats.activeUsers / stats.totalUsers) * 100)}%
+            {stats.totalUsers > 0 ? Math.round((stats.activeUsers / stats.totalUsers) * 100) : 0}%
           </p>
           <p className="text-gray-500 mt-1" style={{ fontSize: '0.75rem' }}>Users using the platform</p>
         </Card>
@@ -82,11 +130,11 @@ export function Statistics() {
               <MessageSquare className="w-6 h-6 text-white" />
             </div>
             <span className="text-orange-600" style={{ fontSize: '0.875rem', fontWeight: 600 }}>
-              {stats.pendingFeedbacks} new
+              {stats.pendingFeedback} new
             </span>
           </div>
           <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Total Feedback</p>
-          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>{stats.totalFeedbacks}</p>
+          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>{stats.totalFeedback}</p>
           <p className="text-gray-500 mt-1" style={{ fontSize: '0.75rem' }}>User suggestions & reports</p>
         </Card>
 
@@ -98,9 +146,9 @@ export function Statistics() {
             <span className="text-blue-600" style={{ fontSize: '0.875rem', fontWeight: 600 }}>Library</span>
           </div>
           <p className="text-gray-600 mb-1" style={{ fontSize: '0.875rem' }}>Content Items</p>
-          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>{stats.totalExercises + 24}</p>
+          <p style={{ fontSize: '1.75rem', fontWeight: 600 }}>{stats.totalExercises + stats.totalMeals}</p>
           <p className="text-gray-500 mt-1" style={{ fontSize: '0.75rem' }}>
-            {stats.totalExercises} exercises, 24 meals
+            {stats.totalExercises} exercises, {stats.totalMeals} meals
           </p>
         </Card>
       </div>
@@ -217,17 +265,24 @@ export function Statistics() {
           </div>
 
           <div className="space-y-3">
-            {users.filter(u => u.role === 'user').slice(-5).reverse().map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p style={{ fontWeight: 600 }}>{user.name}</p>
-                  <p className="text-gray-500" style={{ fontSize: '0.875rem' }}>{user.email}</p>
-                </div>
-                <span className="text-gray-400" style={{ fontSize: '0.75rem' }}>
-                  {new Date(user.createdAt).toLocaleDateString()}
-                </span>
+            {users.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <Calendar className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                <p style={{ fontSize: '0.875rem' }}>No users yet</p>
               </div>
-            ))}
+            ) : (
+              users.filter((u: User) => u.role === 'user').slice(-5).reverse().map((user: User) => (
+                <div key={user.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <p style={{ fontWeight: 600 }}>{user.name}</p>
+                    <p className="text-gray-500" style={{ fontSize: '0.875rem' }}>{user.email}</p>
+                  </div>
+                  <span className="text-gray-400" style={{ fontSize: '0.75rem' }}>
+                    {new Date(user.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </Card>
       </div>

@@ -54,6 +54,7 @@
       outDir: 'build',
     },
     server: {
+      host: '0.0.0.0', // Cho phép truy cập từ mạng LAN
       port: 3000,
       open: true,
     },

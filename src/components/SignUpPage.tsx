@@ -1,18 +1,16 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
-import { useData } from './DataContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Leaf } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 export function SignUpPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
-  const { addUser, users } = useData();
+  const { register } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -39,13 +37,6 @@ export function SignUpPage() {
       return;
     }
     
-    // Check if email already exists
-    if (users.some(u => u.email === email)) {
-      setErrors(prev => ({ ...prev, email: 'Email này đã được sử dụng.' }));
-      toast.error('Email already exists!');
-      return;
-    }
-    
     if (!password || password.length < 6) {
       setErrors(prev => ({ ...prev, password: 'Mật khẩu phải có ít nhất 6 ký tự.' }));
       return;
@@ -59,29 +50,30 @@ export function SignUpPage() {
 
     setIsLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    // Add user to backend
-    const userName = email.split('@')[0];
-    addUser({
-      name: userName,
-      email,
-      role: 'user',
-      isActive: true,
-    });
-    
-    // Mock registration
-    login('user', userName);
-    toast.success('Account created successfully!');
-    navigate('/user/dashboard');
-    
-    setIsLoading(false);
+    try {
+      // Use real API
+      const username = email.split('@')[0];
+      await register({
+        username,
+        email,
+        password,
+        fullName: username
+      });
+      
+      toast.success('Account created successfully!');
+      navigate('/user/dashboard');
+    } catch (error: any) {
+      if (error.message.includes('already exists')) {
+        setErrors(prev => ({ ...prev, email: 'Email này đã được sử dụng.' }));
+      }
+      toast.error(error.message || 'Registration failed!');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSocialSignUp = (provider: string) => {
-    login('user', `${provider} User`);
-    navigate('/user/dashboard');
+    toast.info(`${provider} login coming soon!`);
   };
 
   return (

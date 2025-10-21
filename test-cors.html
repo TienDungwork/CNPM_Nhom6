@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CORS Test</title>
+</head>
+<body>
+    <h1>Test Backend CORS</h1>
+    <button onclick="testHealth()">Test Health Check</button>
+    <button onclick="testLogin()">Test Login</button>
+    <pre id="result"></pre>
+
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+
+        function showResult(data) {
+            document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function testHealth() {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                showResult({ success: true, data });
+            } catch (error) {
+                showResult({ success: false, error: error.message });
+            }
+        }
+
+        async function testLogin() {
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'testuser@example.com',
+                        password: 'Test@123456'
+                    })
+                });
+                const data = await response.json();
+                showResult({ success: true, data });
+            } catch (error) {
+                showResult({ success: false, error: error.message });
+            }
+        }
+    </script>
+</body>
+</html>
